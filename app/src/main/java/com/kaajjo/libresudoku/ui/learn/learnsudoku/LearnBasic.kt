@@ -1,6 +1,8 @@
 package com.kaajjo.libresudoku.ui.learn.learnsudoku
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -10,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.kaajjo.libresudoku.R
@@ -99,21 +102,44 @@ fun LearnBasic(
             }
         }
 
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp)
-        ) {
-            Board(
-                board = board,
-                cellsToHighlight = if (step < stepsCell.size) stepsCell[step] else null,
-                onClick = { },
-                selectedCell = Cell(-1, -1)
-            )
-            TutorialBottomContent(
-                steps = steps,
-                step = step,
-                onPreviousClick = { if (step > 0) step-- },
-                onNextClick = { if (step < (steps.size - 1)) step++ }
-            )
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        if (isLandscape) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp)
+            ) {
+                Board(
+                    board = board,
+                    cellsToHighlight = if (step < stepsCell.size) stepsCell[step] else null,
+                    onClick = { },
+                    selectedCell = Cell(-1, -1)
+                )
+                TutorialBottomContent(
+                    steps = steps,
+                    step = step,
+                    onPreviousClick = { if (step > 0) step-- },
+                    onNextClick = { if (step < (steps.size - 1)) step++ },
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp)
+            ) {
+                Board(
+                    board = board,
+                    cellsToHighlight = if (step < stepsCell.size) stepsCell[step] else null,
+                    onClick = { },
+                    selectedCell = Cell(-1, -1)
+                )
+                TutorialBottomContent(
+                    steps = steps,
+                    step = step,
+                    onPreviousClick = { if (step > 0) step-- },
+                    onNextClick = { if (step < (steps.size - 1)) step++ }
+                )
+            }
         }
     }
 }

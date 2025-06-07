@@ -7,11 +7,11 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -112,16 +112,23 @@ fun Board(
 ) {
     BoxWithConstraints(
         modifier = modifier
-            .fillMaxWidth()
             .aspectRatio(1f)
             .padding(4.dp)
     ) {
-        val maxWidth = constraints.maxWidth.toFloat()
+        val boxWithConstraintsScope = this
+
+        var maxWidth by remember { mutableFloatStateOf(boxWithConstraintsScope.constraints.maxWidth.toFloat()) }
 
         // single cell size
-        val cellSize by remember(size) { mutableFloatStateOf(maxWidth / size.toFloat()) }
+        var cellSize by remember(size) { mutableFloatStateOf(maxWidth / size.toFloat()) }
         // div for notes in one row in cell
-        val cellSizeDivWidth by remember(size) { mutableFloatStateOf(cellSize / ceil(sqrt(size.toFloat()))) }
+        var cellSizeDivWidth by remember(size) { mutableFloatStateOf(cellSize / ceil(sqrt(size.toFloat()))) }
+
+        SideEffect {
+            maxWidth = boxWithConstraintsScope.constraints.maxWidth.toFloat()
+            cellSize = maxWidth / size.toFloat()
+            cellSizeDivWidth = cellSize / ceil(sqrt(size.toFloat()))
+        }
 
         val errorColor = boardColors.errorColor
         val foregroundColor = boardColors.foregroundColor

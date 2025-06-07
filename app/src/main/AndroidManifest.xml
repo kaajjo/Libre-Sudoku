@@ -24,7 +24,6 @@
             android:name=".MainActivity"
             android:configChanges="locale|layoutDirection"
             android:exported="true"
-            android:screenOrientation="portrait"
             android:theme="@style/Theme.LibreSudoku">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

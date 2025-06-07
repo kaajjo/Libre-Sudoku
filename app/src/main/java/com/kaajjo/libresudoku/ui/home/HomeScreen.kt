@@ -146,34 +146,38 @@ fun HomeScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                if (lastGame != null && !lastGame!!.completed) {
-                    Button(onClick = {
-                        if (lastGames.size <= 1) {
-                            lastGame?.let {
-                                navigator.navigate(
-                                    GameScreenDestination(
-                                        gameUid = it.uid,
-                                        playedBefore = true
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (lastGame != null && !lastGame!!.completed) {
+                        Button(onClick = {
+                            if (lastGames.size <= 1) {
+                                lastGame?.let {
+                                    navigator.navigate(
+                                        GameScreenDestination(
+                                            gameUid = it.uid,
+                                            playedBefore = true
+                                        )
                                     )
-                                )
+                                }
+                            } else {
+                                lastGamesBottomSheet = true
                             }
-                        } else {
-                            lastGamesBottomSheet = true
+                        }) {
+                            Text(stringResource(R.string.action_continue))
                         }
-                    }) {
-                        Text(stringResource(R.string.action_continue))
-                    }
-                    FilledTonalButton(onClick = {
-                        continueGameDialog = true
-                    }) {
-                        Text(stringResource(R.string.action_play))
-                    }
-                } else {
-                    Button(onClick = {
-                        viewModel.giveUpLastGame()
-                        viewModel.startGame()
-                    }) {
-                        Text(stringResource(R.string.action_play))
+                        FilledTonalButton(onClick = {
+                            continueGameDialog = true
+                        }) {
+                            Text(stringResource(R.string.action_play))
+                        }
+                    } else {
+                        Button(onClick = {
+                            viewModel.giveUpLastGame()
+                            viewModel.startGame()
+                        }) {
+                            Text(stringResource(R.string.action_play))
+                        }
                     }
                 }
             }

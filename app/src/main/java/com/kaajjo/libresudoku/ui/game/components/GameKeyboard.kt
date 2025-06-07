@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.kaajjo.libresudoku.core.qqwing.GameType
 import com.kaajjo.libresudoku.ui.theme.LibreSudokuTheme
 import com.kaajjo.libresudoku.ui.util.LightDarkPreview
+import kotlin.math.ceil
+import kotlin.math.sqrt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -178,6 +180,62 @@ fun DefaultGameKeyboard(
                         },
                         selected = number == selected
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SquareGameKeyboard(
+    modifier: Modifier = Modifier,
+    itemModifier: Modifier = Modifier,
+    remainingUses: List<Int>? = null,
+    onClick: (Int) -> Unit,
+    onLongClick: (Int) -> Unit,
+    size: Int,
+    selected: Int = 0
+) {
+    val numbers by remember(size) { mutableStateOf((1..size).toList()) }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        val chunkSize = ceil(sqrt(size.toDouble())).toInt()
+        val chunkedNumbers = numbers.chunked(chunkSize)
+        chunkedNumbers.forEachIndexed { index, chunked ->
+            AnimatedVisibility(
+                visible =
+                    (!remainingUses.isNullOrEmpty() && remainingUses.chunked(chunkSize)[index].any { it > 0 }) ||
+                            remainingUses == null
+            ) {
+                KeyboardRow {
+                    chunked.forEach { number ->
+                        val hide =
+                            remainingUses != null && (remainingUses.size > number && remainingUses[number - 1] <= 0)
+                        KeyboardItem(
+                            modifier = itemModifier
+                                .weight(1f)
+                                .alpha(if (hide) 0f else 1f),
+                            number = number,
+                            onClick = {
+                                if (!hide) {
+                                    onClick(number)
+                                }
+                            },
+                            onLongClick = {
+                                if (!hide) {
+                                    onLongClick(number)
+                                }
+                            },
+                            remainingUses = if (remainingUses != null && remainingUses.size >= number) {
+                                remainingUses[number - 1]
+                            } else {
+                                null
+                            },
+                            selected = number == selected
+                        )
+                    }
                 }
             }
         }
