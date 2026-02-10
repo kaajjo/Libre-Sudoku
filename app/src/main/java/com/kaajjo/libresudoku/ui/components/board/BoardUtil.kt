@@ -1,6 +1,17 @@
 package com.kaajjo.libresudoku.ui.components.board
 
+import com.kaajjo.libresudoku.core.Cell
 import com.kaajjo.libresudoku.core.qqwing.GameType
+
+data class BoardCellCoordinate(
+    val row: Int,
+    val col: Int
+)
+
+data class CompletedBoardGroup(
+    val key: String,
+    val cells: List<BoardCellCoordinate>
+)
 
 fun getNoteColumnNumber(number: Int, size: Int): Int {
     if (size == 9 || size == 6) {
@@ -57,4 +68,63 @@ fun getSectionWidthForSize(size: Int): Int {
         12 -> GameType.Default12x12.sectionWidth
         else -> GameType.Default9x9.sectionWidth
     }
+}
+
+fun getCompletedBoardGroups(
+    board: List<List<Cell>>,
+    size: Int
+): List<CompletedBoardGroup> {
+    val completedGroups = mutableListOf<CompletedBoardGroup>()
+
+    for (row in 0 until size) {
+        if ((0 until size).all { col -> board[row][col].value in 1..size }) {
+            completedGroups.add(
+                CompletedBoardGroup(
+                    key = "row-$row",
+                    cells = (0 until size).map { col -> BoardCellCoordinate(row = row, col = col) }
+                )
+            )
+        }
+    }
+
+    for (col in 0 until size) {
+        if ((0 until size).all { row -> board[row][col].value in 1..size }) {
+            completedGroups.add(
+                CompletedBoardGroup(
+                    key = "col-$col",
+                    cells = (0 until size).map { row -> BoardCellCoordinate(row = row, col = col) }
+                )
+            )
+        }
+    }
+
+    val sectionHeight = getSectionHeightForSize(size)
+    val sectionWidth = getSectionWidthForSize(size)
+
+    for (sectionRow in 0 until size step sectionHeight) {
+        for (sectionCol in 0 until size step sectionWidth) {
+            val cells = mutableListOf<BoardCellCoordinate>()
+            var completed = true
+
+            for (row in sectionRow until sectionRow + sectionHeight) {
+                for (col in sectionCol until sectionCol + sectionWidth) {
+                    cells.add(BoardCellCoordinate(row = row, col = col))
+                    if (board[row][col].value !in 1..size) {
+                        completed = false
+                    }
+                }
+            }
+
+            if (completed) {
+                completedGroups.add(
+                    CompletedBoardGroup(
+                        key = "block-$sectionRow-$sectionCol",
+                        cells = cells
+                    )
+                )
+            }
+        }
+    }
+
+    return completedGroups
 }

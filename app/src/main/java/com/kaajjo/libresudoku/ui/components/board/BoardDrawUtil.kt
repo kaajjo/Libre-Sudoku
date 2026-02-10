@@ -101,7 +101,8 @@ fun DrawScope.drawNumbers(
     lockedTextPaint: Paint,
     textPaint: Paint,
     questions: Boolean,
-    cellSize: Float
+    cellSize: Float,
+    cellScaleProvider: (row: Int, col: Int) -> Float = { _, _ -> 1f }
 ) {
     drawIntoCanvas { canvas ->
         for (i in 0 until size) {
@@ -118,6 +119,17 @@ fun DrawScope.drawNumbers(
                     val textBounds = android.graphics.Rect()
                     textPaint.getTextBounds(textToDraw, 0, 1, textBounds)
                     val textWidth = paint.measureText(textToDraw)
+                    val cellScale = cellScaleProvider(i, j)
+
+                    canvas.nativeCanvas.save()
+                    if (cellScale != 1f) {
+                        canvas.nativeCanvas.scale(
+                            cellScale,
+                            cellScale,
+                            board[i][j].col * cellSize + cellSize / 2f,
+                            board[i][j].row * cellSize + cellSize / 2f
+                        )
+                    }
 
                     canvas.nativeCanvas.drawText(
                         textToDraw,
@@ -125,9 +137,45 @@ fun DrawScope.drawNumbers(
                         board[i][j].row * cellSize + (cellSize + textBounds.height()) / 2f,
                         paint
                     )
+                    canvas.nativeCanvas.restore()
                 }
             }
         }
+    }
+}
+
+fun DrawScope.drawCompletedCellsAnimation(
+    animatedCellsScale: Map<BoardCellCoordinate, Float>,
+    cellSize: Float,
+    gameSize: Int,
+    color: Color,
+    cornerRadius: CornerRadius,
+    cellInset: Float = 0f
+) {
+    animatedCellsScale.forEach { (cell, scale) ->
+        if (scale <= 1f) return@forEach
+
+        val baseSize = (cellSize - cellInset * 2f).coerceAtLeast(0f)
+        val scaledSize = baseSize * scale
+        val sizeDiff = (scaledSize - baseSize) / 2f
+
+        drawRoundCell(
+            row = cell.row,
+            col = cell.col,
+            gameSize = gameSize,
+            rect = Rect(
+                offset = Offset(
+                    x = cell.col * cellSize + cellInset - sizeDiff,
+                    y = cell.row * cellSize + cellInset - sizeDiff
+                ),
+                size = Size(scaledSize, scaledSize)
+            ),
+            color = color,
+            cornerRadius = CornerRadius(
+                x = cornerRadius.x * scale,
+                y = cornerRadius.y * scale
+            )
+        )
     }
 }
 
@@ -153,18 +201,12 @@ fun roundRectForCell(
     rect: Rect,
     cornerRadius: CornerRadius
 ): RoundRect {
-    val topLeft = if (row == 0 && col == 0) cornerRadius else CornerRadius.Zero
-    val topRight = if (row == 0 && col == gameSize - 1) cornerRadius else CornerRadius.Zero
-    val bottomLeft = if (row == gameSize - 1 && col == 0) cornerRadius else CornerRadius.Zero
-    val bottomRight =
-        if (row == gameSize - 1 && col == gameSize - 1) cornerRadius else CornerRadius.Zero
-
     return RoundRect(
         rect = rect,
-        topLeft = topLeft,
-        topRight = topRight,
-        bottomLeft = bottomLeft,
-        bottomRight = bottomRight
+        topLeft = cornerRadius,
+        topRight = cornerRadius,
+        bottomLeft = cornerRadius,
+        bottomRight = cornerRadius
     )
 }
 

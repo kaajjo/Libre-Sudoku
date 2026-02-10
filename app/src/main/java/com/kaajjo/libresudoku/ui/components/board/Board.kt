@@ -1,6 +1,10 @@
 package com.kaajjo.libresudoku.ui.components.board
 
+import android.annotation.SuppressLint
 import android.graphics.Paint
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -15,9 +19,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -30,7 +37,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -49,6 +55,9 @@ import com.kaajjo.libresudoku.ui.util.LightDarkPreview
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.sqrt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Sudoku board
@@ -75,6 +84,7 @@ import kotlin.math.sqrt
  * @param crossHighlight highlight some boxes on the board
  * @param cages a list of [Cage] for killer sudoku
  */
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun Board(
     modifier: Modifier = Modifier,
@@ -122,6 +132,7 @@ fun Board(
         val cellSize by remember(size) { mutableFloatStateOf(maxWidth / size.toFloat()) }
         // div for notes in one row in cell
         val cellSizeDivWidth by remember(size) { mutableFloatStateOf(cellSize / ceil(sqrt(size.toFloat()))) }
+        val highlightedCellInset = cellSize * 0.035f
 
         val errorColor = boardColors.errorColor
         val foregroundColor = boardColors.foregroundColor
@@ -136,6 +147,13 @@ fun Board(
 
         val vertThick by remember(size) { mutableIntStateOf(floor(sqrt(size.toFloat())).toInt()) }
         val horThick by remember(size) { mutableIntStateOf(ceil(sqrt(size.toFloat())).toInt()) }
+
+        var completionAnimationInitialized by remember(size) { mutableStateOf(false) }
+        var animatedCompletedGroupKeys by remember(size) { mutableStateOf(setOf<String>()) }
+        var previousBoardValuesSnapshot by remember(size) { mutableStateOf<List<Int>?>(null) }
+        val animatedCellsScale = remember(size) { mutableStateMapOf<BoardCellCoordinate, Float>() }
+        val animationScope = rememberCoroutineScope()
+        val boardValuesKey = buildBoardValuesKey(board = board, size = size)
 
         var fontSizePx by remember { mutableFloatStateOf(1f) }
         with(LocalDensity.current) {
@@ -217,7 +235,6 @@ fun Board(
             )
         }
 
-        val context = LocalContext.current
         LaunchedEffect(mainTextSize, noteTextSize, boardColors) {
             textPaint = Paint().apply {
                 color = foregroundColor.toArgb()
@@ -243,6 +260,41 @@ fun Board(
                 color = notesColor.toArgb()
                 isAntiAlias = true
                 textSize = killerSumSizePx
+            }
+        }
+
+        LaunchedEffect(boardValuesKey, size) {
+            val completedGroups = getCompletedBoardGroups(board = board, size = size)
+            val completedGroupKeys = completedGroups.map { it.key }.toSet()
+            val currentBoardValues = buildBoardValuesSnapshot(board = board, size = size)
+
+            if (!completionAnimationInitialized) {
+                completionAnimationInitialized = true
+                animatedCompletedGroupKeys = completedGroupKeys
+                previousBoardValuesSnapshot = currentBoardValues
+                return@LaunchedEffect
+            }
+
+            val newlyCompletedGroups = completedGroups.filter { group ->
+                !animatedCompletedGroupKeys.contains(group.key)
+            }
+
+            val changedValuesCount = countChangedBoardValues(
+                previousValues = previousBoardValuesSnapshot,
+                currentValues = currentBoardValues
+            )
+            val shouldAnimate = changedValuesCount == 1 && newlyCompletedGroups.isNotEmpty()
+
+            animatedCompletedGroupKeys = completedGroupKeys
+            previousBoardValuesSnapshot = currentBoardValues
+
+            if (shouldAnimate) {
+                animationScope.launch {
+                    animateCompletedGroups(
+                        groups = newlyCompletedGroups,
+                        animatedCellsScale = animatedCellsScale
+                    )
+                }
             }
         }
 
@@ -322,10 +374,13 @@ fun Board(
                     gameSize = size,
                     rect = Rect(
                         offset = Offset(
-                            x = selectedCell.col * cellSize,
-                            y = selectedCell.row * cellSize
+                            x = selectedCell.col * cellSize + highlightedCellInset,
+                            y = selectedCell.row * cellSize + highlightedCellInset
                         ),
-                        size = Size(cellSize, cellSize)
+                        size = Size(
+                            cellSize - highlightedCellInset * 2f,
+                            cellSize - highlightedCellInset * 2f
+                        )
                     ),
                     color = highlightColor.copy(alpha = 0.2f),
                     cornerRadius = cornerRadius
@@ -352,10 +407,13 @@ fun Board(
                                 gameSize = size,
                                 rect = Rect(
                                     offset = Offset(
-                                        x = board[i][j].col * cellSize,
-                                        y = board[i][j].row * cellSize
+                                        x = board[i][j].col * cellSize + highlightedCellInset,
+                                        y = board[i][j].row * cellSize + highlightedCellInset
                                     ),
-                                    size = Size(cellSize, cellSize)
+                                    size = Size(
+                                        cellSize - highlightedCellInset * 2f,
+                                        cellSize - highlightedCellInset * 2f
+                                    )
                                 ),
                                 color = highlightColor.copy(alpha = 0.2f),
                                 cornerRadius = cornerRadius
@@ -372,10 +430,13 @@ fun Board(
                     color = highlightColor.copy(alpha = 0.3f),
                     rect = Rect(
                         Offset(
-                            x = it.col * cellSize,
-                            y = it.row * cellSize
+                            x = it.col * cellSize + highlightedCellInset,
+                            y = it.row * cellSize + highlightedCellInset
                         ),
-                        size = Size(cellSize, cellSize)
+                        size = Size(
+                            cellSize - highlightedCellInset * 2f,
+                            cellSize - highlightedCellInset * 2f
+                        )
                     ),
                     cornerRadius = cornerRadius
                 )
@@ -411,6 +472,15 @@ fun Board(
                 }
             }
 
+            drawCompletedCellsAnimation(
+                animatedCellsScale = animatedCellsScale,
+                cellSize = cellSize,
+                gameSize = size,
+                color = highlightColor.copy(alpha = 0.35f),
+                cornerRadius = cornerRadius,
+                cellInset = highlightedCellInset
+            )
+
             drawNumbers(
                 size = size,
                 board = board,
@@ -419,7 +489,10 @@ fun Board(
                 lockedTextPaint = lockedTextPaint,
                 textPaint = textPaint,
                 questions = questions,
-                cellSize = cellSize
+                cellSize = cellSize,
+                cellScaleProvider = { row, col ->
+                    animatedCellsScale[BoardCellCoordinate(row = row, col = col)] ?: 1f
+                }
             )
 
             if (!notes.isNullOrEmpty() && !questions && renderNotes) {
@@ -474,6 +547,109 @@ fun Board(
                 }
             }
         }
+    }
+}
+
+private const val CompletedCellScale = 1.3f
+private const val CompletedCellScaleUpDurationMs = 120
+private const val CompletedCellScaleDownDurationMs = 135
+private const val CompletedCellStepDelayMs = 20L
+private const val CompletedGroupDelayMs = 40L
+
+private fun buildBoardValuesKey(
+    board: List<List<Cell>>,
+    size: Int
+): String {
+    return buildString(capacity = size * size * 2) {
+        for (row in 0 until size) {
+            for (col in 0 until size) {
+                append(board[row][col].value)
+                append(',')
+            }
+        }
+    }
+}
+
+private fun buildBoardValuesSnapshot(
+    board: List<List<Cell>>,
+    size: Int
+): List<Int> {
+    val values = ArrayList<Int>(size * size)
+
+    for (row in 0 until size) {
+        for (col in 0 until size) {
+            values.add(board[row][col].value)
+        }
+    }
+
+    return values
+}
+
+private fun countChangedBoardValues(
+    previousValues: List<Int>?,
+    currentValues: List<Int>
+): Int {
+    if (previousValues == null || previousValues.size != currentValues.size) {
+        return Int.MAX_VALUE
+    }
+
+    var changedCount = 0
+    for (index in previousValues.indices) {
+        if (previousValues[index] != currentValues[index]) {
+            changedCount++
+        }
+    }
+
+    return changedCount
+}
+
+private suspend fun animateCompletedGroups(
+    groups: List<CompletedBoardGroup>,
+    animatedCellsScale: SnapshotStateMap<BoardCellCoordinate, Float>
+) {
+    groups.forEach { group ->
+        coroutineScope {
+            group.cells.forEachIndexed { index, cell ->
+                launch {
+                    delay(index * CompletedCellStepDelayMs)
+                    animateCompletedCell(
+                        cell = cell,
+                        animatedCellsScale = animatedCellsScale
+                    )
+                }
+            }
+        }
+        delay(CompletedGroupDelayMs)
+    }
+}
+
+private suspend fun animateCompletedCell(
+    cell: BoardCellCoordinate,
+    animatedCellsScale: SnapshotStateMap<BoardCellCoordinate, Float>
+) {
+    val scaleAnimatable = Animatable(initialValue = 1f)
+    try {
+        scaleAnimatable.animateTo(
+            targetValue = CompletedCellScale,
+            animationSpec = tween(
+                durationMillis = CompletedCellScaleUpDurationMs,
+                easing = FastOutSlowInEasing
+            )
+        ) {
+            animatedCellsScale[cell] = value
+        }
+
+        scaleAnimatable.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = CompletedCellScaleDownDurationMs,
+                easing = FastOutSlowInEasing
+            )
+        ) {
+            animatedCellsScale[cell] = value
+        }
+    } finally {
+        animatedCellsScale.remove(cell)
     }
 }
 
