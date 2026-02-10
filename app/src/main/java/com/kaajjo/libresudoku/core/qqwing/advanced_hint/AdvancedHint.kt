@@ -142,37 +142,48 @@ class AdvancedHint(
         return null
     }
 
-    // TODO: Add boxes
     private fun checkForHiddenSingle(): AdvancedHintData? {
         if (notes.isEmpty()) return null
+        var hiddenSingle: Note? = null
+        var helpCells: List<Cell>? = null
         val singlesInRow = notes.groupBy { Pair(it.row, it.value) }
             .filter { it.value.size == 1 }
             .map { it.value }
-            .randomOrNull()
-        val singlesInColumn = notes.groupBy { Pair(it.row, it.value) }
+            .randomOrNull()?.first()
+        if (singlesInRow != null) {
+            hiddenSingle = singlesInRow
+            helpCells = rows[singlesInRow.row]
+        }
+        val singlesInColumn = notes.groupBy { Pair(it.col, it.value) }
             .filter { it.value.size == 1 }
             .map { it.value }
-            .randomOrNull()
-
-        val pickedSingle = setOf(singlesInRow, singlesInColumn).randomOrNull() ?: return null
-        return if (pickedSingle.isNotEmpty()) {
-            val hiddenSingle = pickedSingle.first()
-            val cell = solvedBoard[hiddenSingle.row][hiddenSingle.col]
-            return AdvancedHintData(
-                titleRes = R.string.hint_hidden_single_title,
-                textResWithArg = Pair(
-                    R.string.hint_hidden_single_detail,
-                    listOf(
-                        cellStringFormat(cell),
-                        cell.value.toString()
-                    )
-                ),
-                targetCell = cell,
-                helpCells = emptyList()
-            )
-        } else {
-            null
+            .randomOrNull()?.first()
+        if (singlesInColumn != null) {
+            hiddenSingle = singlesInColumn
+            helpCells = columns[singlesInColumn.col]
         }
+        val singlesInBox = notes.groupBy { Pair(getBoxNumber(it.row, it.col), it.value) }
+            .filter { it.value.size == 1 }
+            .map { it.value }
+            .randomOrNull()?.first()
+        if (singlesInBox != null) {
+            hiddenSingle = singlesInBox
+            helpCells = boxes[getBoxNumber(singlesInBox.row, singlesInBox.col)]
+        }
+        if (hiddenSingle == null) return null
+        val cell = solvedBoard[hiddenSingle.row][hiddenSingle.col]
+        return AdvancedHintData(
+            titleRes = R.string.hint_hidden_single_title,
+            textResWithArg = Pair(
+                R.string.hint_hidden_single_detail,
+                listOf(
+                    cellStringFormat(cell),
+                    cell.value.toString()
+                )
+            ),
+            targetCell = cell,
+            helpCells = helpCells ?: emptyList()
+        )
     }
 
     private fun getRows(): List<List<Cell>> {
@@ -191,6 +202,13 @@ class AdvancedHint(
         return transposedBoard.toList()
     }
 
+    private fun getBoxNumber(row: Int, col: Int): Int {
+        val sectionRow = row / type.sectionHeight
+        val sectionColumn = col / type.sectionWidth
+        val sectorsPerRow = type.size / type.sectionWidth
+        return sectionRow * sectorsPerRow + sectionColumn
+    }
+
     private fun getBoxes(): List<List<Cell>> {
         val size = type.size
         val sectionWidth = type.sectionWidth
@@ -199,10 +217,7 @@ class AdvancedHint(
         val boxes = MutableList(sectionWidth * sectionHeight) { mutableListOf<Cell>() }
         for (i in 0 until size) {
             for (j in 0 until size) {
-                val sectionRow = i / sectionHeight
-                val sectionColumn = j / sectionWidth
-                val sectorsPerRow = size / sectionWidth
-                val boxNumber = sectionRow * sectorsPerRow + sectionColumn
+                val boxNumber = getBoxNumber(i, j)
                 boxes[boxNumber].add(board[i][j])
             }
         }
