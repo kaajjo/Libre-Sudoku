@@ -65,12 +65,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.flowWithLifecycle
 import com.kaajjo.libresudoku.R
-import com.kaajjo.libresudoku.core.PreferencesConstants
 import com.kaajjo.libresudoku.data.backup.BackupData
 import com.kaajjo.libresudoku.data.backup.BackupWorker
 import com.kaajjo.libresudoku.data.datastore.AppSettingsManager
+import com.kaajjo.libresudoku.ui.backup.models.BackupUiEvent
+import com.kaajjo.libresudoku.ui.backup.models.BackupUiSideEffect
 import com.kaajjo.libresudoku.ui.components.AnimatedNavigation
 import com.kaajjo.libresudoku.ui.components.GrantPermissionCard
 import com.kaajjo.libresudoku.ui.components.PreferenceRow
@@ -85,7 +89,6 @@ import com.kaajjo.libresudoku.ui.util.isScrolledToEnd
 import com.kaajjo.libresudoku.ui.util.isScrolledToStart
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import kotlinx.coroutines.launch
 
 private val autoBackupIntervalEntries = mapOf(
     0L to R.string.autobackup_never,
@@ -101,12 +104,12 @@ fun BackupScreen(
     navigator: DestinationsNavigator,
     viewModel: BackupScreenViewModel = hiltViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scrollBehavior = rememberTopAppBarScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    val backupUri by viewModel.backupUri.collectAsStateWithLifecycle()
 
     var backupOptionsDialog by rememberSaveable { mutableStateOf(false) }
     var autoBackupsNumberDialog by rememberSaveable { mutableStateOf(false) }
@@ -115,14 +118,9 @@ fun BackupScreen(
 
     var autoBackupAvailable by remember { mutableStateOf(false) }
 
-    val autoBackupsNumber by viewModel.autoBackupsNumber.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_AUTO_BACKUPS_NUMBER)
-    val autoBackupInterval by viewModel.autoBackupInterval.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_AUTOBACKUP_INTERVAL)
-    val lastBackupDate by viewModel.lastBackupDate.collectAsStateWithLifecycle(initialValue = null)
-    val dateFormat by viewModel.dateFormat.collectAsStateWithLifecycle(initialValue = "")
-
-    LaunchedEffect(Unit) {
+    LaunchedEffect(uiState) {
         autoBackupAvailable = context.contentResolver
-            .persistedUriPermissions.any { it.uri == backupUri.toUri() }
+            .persistedUriPermissions.any { it.uri == uiState.backupDirectory.toUri() }
     }
 
     val requestDirectoryAccess = rememberLauncherForActivityResult(
@@ -134,10 +132,14 @@ fun BackupScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
 
-                viewModel.setBackupDirectory(uri.toString())
+                viewModel.sendEvent(
+                    event = BackupUiEvent.SetBackupDirectory(
+                        path = uri.toString()
+                    )
+                )
 
-                autoBackupAvailable =
-                    context.contentResolver.persistedUriPermissions.any { it.uri == uri }
+                autoBackupAvailable = context.contentResolver.persistedUriPermissions
+                    .any { it.uri == uri }
             }
         }
     )
@@ -146,20 +148,14 @@ fun BackupScreen(
         contract = CreateDocument("application/json"),
         onResult = { uri ->
             if (uri != null) {
-                viewModel.saveBackupTo(
-                    outputStream = context.contentResolver.openOutputStream(uri),
-                    onComplete = { exception ->
-                        if (exception != null) {
-                            scope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.save_backup_error))
-                            }
-                        } else {
-                            scope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.save_backup_success))
-                            }
-                        }
-                    }
-                )
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                if (outputStream != null) {
+                    viewModel.sendEvent(
+                        event = BackupUiEvent.SaveBackup(
+                            outputStream = outputStream
+                        )
+                    )
+                }
             }
         }
     )
@@ -170,17 +166,42 @@ fun BackupScreen(
             if (uri != null) {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     inputStream.bufferedReader().use {
-                        viewModel.prepareBackupToRestore(
-                            it.readText(),
-                            onComplete = {
-                                restoreDialog = true
-                            }
+                        viewModel.sendEvent(
+                            BackupUiEvent.PrepareBackupToRestore(
+                                backupString = it.readText()
+                            )
                         )
                     }
                 }
             }
         }
     )
+
+    LaunchedEffect(viewModel.effect, lifecycleOwner) {
+        viewModel.effect
+            .flowWithLifecycle(lifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+            .collect { effect ->
+                when (effect) {
+                    is BackupUiSideEffect.ShowSnackbar -> {
+                        snackbarHostState.showSnackbar(
+                            message = effect.message.asString(context)
+                        )
+                    }
+
+                    BackupUiSideEffect.BackupCreated -> {
+                        saveBackupFile.launch(BackupData.nameManual)
+                    }
+
+                    BackupUiSideEffect.ReadyToRestore -> {
+                        restoreDialog = true
+                    }
+
+                    BackupUiSideEffect.SaveBackup -> {
+                        saveBackupFile.launch(BackupData.nameManual)
+                    }
+                }
+            }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -204,12 +225,12 @@ fun BackupScreen(
             modifier = Modifier.padding(paddingValues),
             contentPadding = PaddingValues(top = 8.dp)
         ) {
-            lastBackupDate?.let { date ->
+            uiState.lastBackupDate?.let { date ->
                 item {
                     CardRow(
                         text = stringResource(
                             R.string.last_backup_date,
-                            date.format(AppSettingsManager.dateFormat(dateFormat))
+                            date.format(AppSettingsManager.dateFormat(uiState.dateFormat))
                         ),
                         icon = Icons.Rounded.History,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -254,24 +275,26 @@ fun BackupScreen(
                 }
             }
             item {
-                PreferenceRow(
-                    title = stringResource(R.string.auto_backups_frequency),
-                    subtitle = if (autoBackupIntervalEntries[autoBackupInterval] != null)
-                        stringResource(autoBackupIntervalEntries[autoBackupInterval]!!)
-                    else
-                        pluralStringResource(
-                            R.plurals.every_x_hours,
-                            autoBackupInterval.toInt(),
-                            autoBackupInterval.toInt()
-                        ),
-                    enabled = autoBackupAvailable,
-                    onClick = { autoBackupIntervalDialog = true }
-                )
+                uiState.autoBackupIntervalHours.let { interval ->
+                    PreferenceRow(
+                        title = stringResource(R.string.auto_backups_frequency),
+                        subtitle = if (autoBackupIntervalEntries[interval] != null)
+                            stringResource(autoBackupIntervalEntries[interval]!!)
+                        else
+                            pluralStringResource(
+                                R.plurals.every_x_hours,
+                                interval.toInt(),
+                                interval.toInt()
+                            ),
+                        enabled = autoBackupAvailable,
+                        onClick = { autoBackupIntervalDialog = true }
+                    )
+                }
             }
             item {
                 PreferenceRow(
                     title = stringResource(R.string.auto_backups_directory),
-                    subtitle = if (autoBackupAvailable) getReadableURI(backupUri.toUri()) else "",
+                    subtitle = if (autoBackupAvailable) getReadableURI(uiState.backupDirectory.toUri()) else "",
                     enabled = autoBackupAvailable,
                     onClick = {
                         requestDirectoryAccess.launch(null)
@@ -281,7 +304,7 @@ fun BackupScreen(
             item {
                 PreferenceRow(
                     title = stringResource(R.string.auto_backups_max),
-                    subtitle = autoBackupsNumber.toString(),
+                    subtitle = uiState.maxAutomaticBackups.toString(),
                     enabled = autoBackupAvailable,
                     onClick = {
                         autoBackupsNumberDialog = true
@@ -348,19 +371,10 @@ fun BackupScreen(
             onDismissRequest = { backupOptionsDialog = false },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.createBackup(
-                        backupSettings = selectedOptions.contains(1),
-                        onCreated = { backupCreated ->
-                            if (backupCreated) {
-                                saveBackupFile.launch(BackupData.nameManual)
-                            } else {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        context.getString(R.string.creating_backup_error)
-                                    )
-                                }
-                            }
-                        }
+                    viewModel.sendEvent(
+                        event = BackupUiEvent.CreateBackup(
+                            backupSettings = selectedOptions.contains(1),
+                        )
                     )
                     backupOptionsDialog = false
                 }) {
@@ -375,30 +389,34 @@ fun BackupScreen(
         )
     } else if (autoBackupIntervalDialog) {
         SelectionDialog(
-            selectedValue = autoBackupInterval,
+            selectedValue = uiState.autoBackupIntervalHours,
             title = stringResource(R.string.auto_backups_frequency),
             onDismiss = { autoBackupIntervalDialog = false },
             entries = autoBackupIntervalEntries.mapNotNull { (key, value) ->
                 key to stringResource(value)
             }.toMap(),
             onSelect = { value ->
-                viewModel.setAutoBackupInterval(value)
+                viewModel.sendEvent(BackupUiEvent.SetAutoBackupInterval(value))
                 BackupWorker.setupWorker(context, value)
                 autoBackupIntervalDialog = false
             }
         )
     } else if (autoBackupsNumberDialog) {
         SelectionDialog(
-            selectedValue = autoBackupsNumber,
+            selectedValue = uiState.maxAutomaticBackups,
             title = stringResource(R.string.auto_backups_max),
             entries = listOf(1, 2, 3, 4, 5).associateWith { it.toString() },
             onDismiss = { autoBackupsNumberDialog = false },
             onSelect = { value ->
-                viewModel.setAutoBackupsNumber(value)
+                viewModel.sendEvent(BackupUiEvent.SetAutoBackupMaxNumber(value))
                 autoBackupsNumberDialog = false
             }
         )
     } else if (restoreDialog) {
+        var restoreSettings by rememberSaveable {
+            mutableStateOf(true)
+        }
+
         AlertDialog(
             title = { Text(stringResource(R.string.restoring_backup)) },
             text = {
@@ -407,10 +425,7 @@ fun BackupScreen(
                         text = stringResource(R.string.restore_existing_data_alert),
                         fontWeight = FontWeight.SemiBold
                     )
-                    var restoreSettings by rememberSaveable {
-                        mutableStateOf(true)
-                    }
-                    viewModel.backupData?.let { backupData ->
+                    uiState.backupData?.let { backupData ->
                         if (backupData.settings != null) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -436,15 +451,7 @@ fun BackupScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.restoreBackup(
-                            onComplete = {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        context.getString(R.string.restore_backup_success)
-                                    )
-                                }
-                            }
-                        )
+                        viewModel.sendEvent(BackupUiEvent.RestoreBackup(restoreSettings))
                         restoreDialog = false
                     }
                 ) {
@@ -457,7 +464,7 @@ fun BackupScreen(
                 }
             }
         )
-    } else if (viewModel.restoreError) {
+    } else if (uiState.restoreErrorText != null) {
         AlertDialog(
             title = {
                 Text(stringResource(R.string.restore_backup_error))
@@ -488,7 +495,7 @@ fun BackupScreen(
                                     )
                                 ) {
                                     Text(
-                                        text = viewModel.restoreExceptionString,
+                                        text = uiState.restoreErrorText ?: "",
                                         style = MaterialTheme.typography.bodySmall,
                                         textAlign = TextAlign.Center,
                                         fontWeight = FontWeight(500),
@@ -500,7 +507,7 @@ fun BackupScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { clipboardManager.setText(AnnotatedString(text = viewModel.restoreExceptionString)) },
+                        onClick = { clipboardManager.setText(AnnotatedString(text = uiState.restoreErrorText ?: "")) },
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
                         Icon(Icons.Rounded.ContentCopy, contentDescription = null)
@@ -509,9 +516,9 @@ fun BackupScreen(
                     }
                 }
             },
-            onDismissRequest = { viewModel.restoreError = false },
+            onDismissRequest = { viewModel.sendEvent(BackupUiEvent.DismissRestoreError) },
             confirmButton = {
-                TextButton(onClick = { viewModel.restoreError = false }) {
+                TextButton(onClick = { viewModel.sendEvent(BackupUiEvent.DismissRestoreError) }) {
                     Text(stringResource(R.string.dialog_ok))
                 }
             }

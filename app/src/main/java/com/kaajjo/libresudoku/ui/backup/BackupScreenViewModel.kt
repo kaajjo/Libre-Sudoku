@@ -1,11 +1,9 @@
 package com.kaajjo.libresudoku.ui.backup
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kaajjo.libresudoku.BuildConfig
+import com.kaajjo.libresudoku.R
 import com.kaajjo.libresudoku.data.backup.BackupData
 import com.kaajjo.libresudoku.data.backup.SettingsBackup
 import com.kaajjo.libresudoku.data.datastore.AppSettingsManager
@@ -15,12 +13,20 @@ import com.kaajjo.libresudoku.domain.repository.DatabaseRepository
 import com.kaajjo.libresudoku.domain.repository.FolderRepository
 import com.kaajjo.libresudoku.domain.repository.RecordRepository
 import com.kaajjo.libresudoku.domain.repository.SavedGameRepository
+import com.kaajjo.libresudoku.ui.backup.models.BackupUiEvent
+import com.kaajjo.libresudoku.ui.backup.models.BackupUiSideEffect
+import com.kaajjo.libresudoku.ui.backup.models.BackupUiState
 import com.kaajjo.libresudoku.util.FlavorUtil
+import com.kaajjo.libresudoku.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -40,81 +46,118 @@ class BackupScreenViewModel @Inject constructor(
     private val savedGameRepository: SavedGameRepository,
     private val databaseRepository: DatabaseRepository
 ) : ViewModel() {
-    val backupUri = appSettingsManager.backupUri.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        initialValue = ""
-    )
 
-    var backupData by mutableStateOf<BackupData?>(null)
+    private val _uiState = MutableStateFlow(BackupUiState())
+    val uiState = _uiState.asStateFlow()
+
+    private val _effectChannel = Channel<BackupUiSideEffect>()
+    val effect = _effectChannel.receiveAsFlow()
+
     private var backupJson: String? = null
-    var restoreError by mutableStateOf(false)
-    var restoreExceptionString by mutableStateOf("")
 
-    val autoBackupsNumber = appSettingsManager.autoBackupsNumber
-    val autoBackupInterval = appSettingsManager.autoBackupInterval
-    val lastBackupDate = appSettingsManager.lastBackupDate
-    val dateFormat = appSettingsManager.dateFormat
-
-    fun createBackup(
-        backupSettings: Boolean,
-        onCreated: (Boolean) -> Unit
-    ) {
-        try {
-            val boards = runBlocking { boardRepository.getAll().first() }
-            val folders = runBlocking { folderRepository.getAll().first() }
-            val records = runBlocking { recordRepository.getAll().first() }
-            val savedGames = runBlocking { savedGameRepository.getAll().first() }
-
-            backupData = BackupData(
-                appVersionName = BuildConfig.VERSION_NAME + if (FlavorUtil.isFoss()) "-FOSS" else "",
-                appVersionCode = BuildConfig.VERSION_CODE,
-                createdAt = ZonedDateTime.now(),
-                boards = boards,
-                folders = folders,
-                records = records,
-                savedGames = savedGames,
-                settings = if (backupSettings) SettingsBackup.getSettings(
-                    appSettingsManager,
-                    themeSettingsManager
-                ) else null
-            )
-
-            val json = Json {
-                encodeDefaults = true
-                ignoreUnknownKeys = true
+    init {
+        viewModelScope.launch {
+            combine(
+                appSettingsManager.backupUri,
+                appSettingsManager.autoBackupsNumber,
+                appSettingsManager.autoBackupInterval,
+                appSettingsManager.lastBackupDate,
+                appSettingsManager.dateFormat
+            ) { uri, max, interval, date, format ->
+                { state: BackupUiState ->
+                    state.copy(
+                        backupDirectory = uri,
+                        maxAutomaticBackups = max,
+                        autoBackupIntervalHours = interval,
+                        lastBackupDate = date,
+                        dateFormat = format
+                    )
+                }
+            }.collect { mutation ->
+                _uiState.update(mutation)
             }
-            backupJson = json.encodeToString(backupData)
-            onCreated(true)
-        } catch (e: Exception) {
-            onCreated(false)
         }
     }
 
-    fun setBackupDirectory(uri: String) {
+    fun sendEvent(event: BackupUiEvent) {
+        when (event) {
+            is BackupUiEvent.CreateBackup -> createBackup(event.backupSettings)
+            is BackupUiEvent.PrepareBackupToRestore -> prepareBackupToRestore(event.backupString)
+            is BackupUiEvent.SaveBackup -> saveBackupTo(event.outputStream)
+            is BackupUiEvent.SetBackupDirectory -> setBackupDirectory(event.path)
+            is BackupUiEvent.RestoreBackup -> restoreBackup()
+            is BackupUiEvent.SetAutoBackupInterval -> setAutoBackupInterval(event.hours)
+            is BackupUiEvent.SetAutoBackupMaxNumber -> setAutoBackupsNumber(event.max)
+            BackupUiEvent.DismissRestoreError -> dismissRestoreError()
+        }
+    }
+
+    private fun createBackup(backupSettings: Boolean) {
+        try {
+            viewModelScope.launch(Dispatchers.IO) {
+                val boards = boardRepository.getAll().first()
+                val folders = folderRepository.getAll().first()
+                val records = recordRepository.getAll().first()
+                val savedGames = savedGameRepository.getAll().first()
+
+                val backupData = BackupData(
+                    appVersionName = BuildConfig.VERSION_NAME + if (FlavorUtil.isFoss()) "-FOSS" else "",
+                    appVersionCode = BuildConfig.VERSION_CODE,
+                    createdAt = ZonedDateTime.now(),
+                    boards = boards,
+                    folders = folders,
+                    records = records,
+                    savedGames = savedGames,
+                    settings = if (backupSettings) SettingsBackup.getSettings(
+                        appSettingsManager,
+                        themeSettingsManager
+                    ) else null
+                )
+                _uiState.update { it.copy(backupData = backupData) }
+
+                val json = Json {
+                    encodeDefaults = true
+                    ignoreUnknownKeys = true
+                }
+                backupJson = json.encodeToString(backupData)
+
+                produceSideEffect(effect = BackupUiSideEffect.SaveBackup)
+            }
+        } catch (e: Exception) {
+            produceSideEffect(
+                effect = BackupUiSideEffect.ShowSnackbar(
+                    message = UiText.StringResource(
+                        resId = R.string.creating_backup_error
+                    )
+                )
+            )
+        }
+    }
+
+    private fun setBackupDirectory(uri: String) {
         viewModelScope.launch(Dispatchers.IO) {
             appSettingsManager.setBackupUri(uri)
         }
     }
 
-    fun prepareBackupToRestore(
-        backupString: String,
-        onComplete: () -> Unit
-    ) {
+    private fun prepareBackupToRestore(backupString: String) {
         try {
             val json = Json { ignoreUnknownKeys = true }
-            backupData = json.decodeFromString<BackupData?>(backupString)
-            onComplete()
+            val backupData = json.decodeFromString<BackupData?>(backupString)
+            _uiState.update { it.copy(backupData = backupData) }
+            produceSideEffect(BackupUiSideEffect.ReadyToRestore)
         } catch (e: Exception) {
-            restoreError = true
-            restoreExceptionString = e.message.toString()
+            produceSideEffect(
+                effect = BackupUiSideEffect.ShowSnackbar(
+                    message = UiText.PlainString(
+                        text = e.message.toString()
+                    )
+                )
+            )
         }
     }
 
-    fun saveBackupTo(
-        outputStream: OutputStream?,
-        onComplete: (Throwable?) -> Unit
-    ) {
+    private fun saveBackupTo(outputStream: OutputStream?) {
         viewModelScope.launch(Dispatchers.IO) {
             backupJson?.let { backup ->
                 try {
@@ -122,24 +165,34 @@ class BackupScreenViewModel @Inject constructor(
                         it.write(backup.toByteArray())
                         it.close()
                     }
-                    onComplete(null)
-                    viewModelScope.launch(Dispatchers.IO) {
-                        appSettingsManager.setLastBackupDate(ZonedDateTime.now())
-                    }
+                    produceSideEffect(
+                        BackupUiSideEffect.ShowSnackbar(
+                            UiText.StringResource(
+                                resId = R.string.save_backup_success
+                            )
+                        )
+                    )
+                    appSettingsManager.setLastBackupDate(ZonedDateTime.now())
                 } catch (e: Exception) {
-                    onComplete(e)
+                    e.printStackTrace()
+                    produceSideEffect(
+                        BackupUiSideEffect.ShowSnackbar(
+                            UiText.StringResource(
+                                resId = R.string.save_backup_error
+                            )
+                        )
+                    )
                 }
             }
         }
     }
 
-    fun restoreBackup(
-        onComplete: () -> Unit
-    ) {
-        backupData?.let { backup ->
+    private fun restoreBackup() {
+        _uiState.value.backupData?.let { backup ->
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    // deleting all data from database
+                    // deleting all data from the database
+                    // maybe dangerous actually
                     runBlocking { databaseRepository.resetDb() }
 
                     if (backup.boards.isNotEmpty()) {
@@ -150,24 +203,39 @@ class BackupScreenViewModel @Inject constructor(
                     }
 
                     backup.settings?.setSettings(appSettingsManager, themeSettingsManager)
-                    onComplete()
+                    produceSideEffect(
+                        effect = BackupUiSideEffect.ShowSnackbar(
+                            message = UiText.StringResource(
+                                resId = R.string.restore_backup_success
+                            )
+                        )
+                    )
                 } catch (e: Exception) {
-                    restoreError = true
-                    restoreExceptionString = e.message.toString()
+                    _uiState.update { it.copy(restoreErrorText = e.message.toString()) }
                 }
             }
         }
     }
 
-    fun setAutoBackupsNumber(value: Int) {
+    private fun setAutoBackupsNumber(value: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             appSettingsManager.setAutoBackupsNumber(value)
         }
     }
 
-    fun setAutoBackupInterval(hours: Long) {
+    private fun setAutoBackupInterval(hours: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             appSettingsManager.setAutoBackupInterval(hours)
         }
+    }
+
+    private fun produceSideEffect(effect: BackupUiSideEffect) {
+        viewModelScope.launch {
+            _effectChannel.send(effect)
+        }
+    }
+
+    private fun dismissRestoreError() {
+        _uiState.update { it.copy(restoreErrorText = null) }
     }
 }
