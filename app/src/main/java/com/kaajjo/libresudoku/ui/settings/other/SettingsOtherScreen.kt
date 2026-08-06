@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
@@ -53,6 +54,9 @@ fun SettingsOtherScreen(
     val saveLastSelectedDifficultyType by viewModel.saveLastSelectedDifficultyType
         .collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_SAVE_LAST_SELECTED_DIFF_TYPE)
     val keepScreenOn by viewModel.keepScreenOn.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_KEEP_SCREEN_ON)
+    val fullScreen by viewModel.fullScreen.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_FULL_SCREEN
+    )
 
     SettingsScaffoldLazyColumn(
         titleText = stringResource(R.string.pref_other),
@@ -84,6 +88,18 @@ fun SettingsOtherScreen(
                         viewModel.updateKeepScreenOn(!keepScreenOn)
                     },
                     painter = rememberVectorPainter(Icons.Outlined.Smartphone)
+                )
+            }
+
+            item {
+                PreferenceRowSwitch(
+                    title = stringResource(R.string.pref_full_screen),
+                    subtitle = stringResource(R.string.pref_full_screen_subtitle),
+                    checked = fullScreen,
+                    onClick = {
+                        viewModel.updateFullScreen(!fullScreen)
+                    },
+                    painter = rememberVectorPainter(Icons.Outlined.Fullscreen)
                 )
             }
 

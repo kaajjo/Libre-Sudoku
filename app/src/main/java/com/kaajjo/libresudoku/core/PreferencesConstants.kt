@@ -17,8 +17,22 @@ class PreferencesConstants {
         const val DEFAULT_AUTO_ERASE_NOTES = true
         const val DEFAULT_FONT_SIZE_FACTOR = 0
         const val DEFAULT_KEEP_SCREEN_ON = true
+        const val DEFAULT_FULL_SCREEN = false
         const val DEFAULT_INPUT_METHOD = 1
         const val DEFAULT_FUN_KEYBOARD_OVER_NUM = false
+
+        // Board size related settings
+        const val DEFAULT_HIDE_GAME_INFO_ROW = false
+        const val DEFAULT_HIDE_TOP_BAR_IN_GAME = false
+        const val DEFAULT_SHOW_APP_BAR_TOGGLE = true
+        const val DEFAULT_CONTROL_PANEL_SCALE = 100
+        const val CONTROL_PANEL_POSITION_AUTO = 0
+        const val CONTROL_PANEL_POSITION_BOTTOM = 1
+        const val CONTROL_PANEL_POSITION_SIDE = 2
+        const val DEFAULT_CONTROL_PANEL_POSITION = CONTROL_PANEL_POSITION_AUTO
+
+        // Available values for the control panel scale, in percent
+        val CONTROL_PANEL_SCALE_VALUES = listOf(60, 70, 80, 90, 100, 110, 120)
         const val DEFAULT_SAVE_LAST_SELECTED_DIFF_TYPE = true
         const val DEFAULT_AUTOBACKUP_INTERVAL = 24L
         const val DEFAULT_AUTO_BACKUPS_NUMBER = 3

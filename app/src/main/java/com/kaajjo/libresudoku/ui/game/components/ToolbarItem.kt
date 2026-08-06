@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,7 +39,8 @@ fun ToolbarItem(
     painter: Painter,
     toggled: Boolean = false,
     onClick: () -> Unit = { },
-    onLongClick: () -> Unit = { }
+    onLongClick: () -> Unit = { },
+    scale: Float = 1f
 ) {
     Box(
         modifier = modifier
@@ -53,10 +55,13 @@ fun ToolbarItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp, horizontal = 16.dp),
+                // a small horizontal padding, otherwise the icon gets clipped by the
+                // rounded background when there are many items on a narrow screen
+                .padding(vertical = 8.dp * scale, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
+                modifier = Modifier.size(24.dp * scale),
                 painter = painter,
                 contentDescription = null,
                 tint = if (toggled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface

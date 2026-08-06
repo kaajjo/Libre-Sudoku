@@ -72,6 +72,7 @@ fun SettingsBoardTheme(
         GameType.Default6x6,
         GameType.Default9x9,
         GameType.Default12x12,
+        GameType.Default16x16,
     )
     var selectedBoardType by remember {
         mutableStateOf(GameType.Default9x9)

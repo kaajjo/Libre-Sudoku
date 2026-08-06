@@ -50,4 +50,32 @@ class SettingsGameplayViewModel @Inject constructor(
             settings.setFunKeyboardOverNum(enabled)
         }
     }
+
+    val hideGameInfoRow = settings.hideGameInfoRow
+    fun updateHideGameInfoRow(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setHideGameInfoRow(enabled)
+        }
+    }
+
+    val showAppBarToggle = settings.showAppBarToggle
+    fun updateShowAppBarToggle(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setShowAppBarToggle(enabled)
+        }
+    }
+
+    val controlPanelScale = settings.controlPanelScale
+    fun updateControlPanelScale(value: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setControlPanelScale(value)
+        }
+    }
+
+    val controlPanelPosition = settings.controlPanelPosition
+    fun updateControlPanelPosition(value: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setControlPanelPosition(value)
+        }
+    }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +86,7 @@ fun Board(
         6 -> 32.sp
         9 -> 26.sp
         12 -> 24.sp
+        16 -> 18.sp
         else -> 14.sp
     },
     autoFontSize: Boolean = false,
@@ -92,6 +94,7 @@ fun Board(
         6 -> 18.sp
         9 -> 12.sp
         12 -> 7.sp
+        16 -> 6.sp
         else -> 14.sp
     },
     selectedCell: Cell,
@@ -113,15 +116,21 @@ fun Board(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            // wrapContentSize loosens the min constraints so that aspectRatio is free to
+            // shrink the board when there isn't enough vertical space for a full width
+            // square (short screens, unfolded foldables). The board stays centered.
+            .wrapContentSize()
             .aspectRatio(1f)
             .padding(4.dp)
     ) {
         val maxWidth = constraints.maxWidth.toFloat()
 
         // single cell size
-        val cellSize by remember(size) { mutableFloatStateOf(maxWidth / size.toFloat()) }
+        // has to depend on maxWidth as well, otherwise the drawn grid keeps the size it had
+        // when the board was first composed (e.g. after folding/unfolding a foldable device)
+        val cellSize by remember(size, maxWidth) { mutableFloatStateOf(maxWidth / size.toFloat()) }
         // div for notes in one row in cell
-        val cellSizeDivWidth by remember(size) { mutableFloatStateOf(cellSize / ceil(sqrt(size.toFloat()))) }
+        val cellSizeDivWidth by remember(size, maxWidth) { mutableFloatStateOf(cellSize / ceil(sqrt(size.toFloat()))) }
 
         val errorColor = boardColors.errorColor
         val foregroundColor = boardColors.foregroundColor
@@ -137,14 +146,13 @@ fun Board(
         val vertThick by remember(size) { mutableIntStateOf(floor(sqrt(size.toFloat())).toInt()) }
         val horThick by remember(size) { mutableIntStateOf(ceil(sqrt(size.toFloat())).toInt()) }
 
-        var fontSizePx by remember { mutableFloatStateOf(1f) }
-        with(LocalDensity.current) {
-            LaunchedEffect(autoFontSize, size, mainTextSize) {
-                fontSizePx = if (autoFontSize) {
-                    (cellSize * 0.9f).toSp().toPx()
-                } else {
-                    mainTextSize.toPx()
-                }
+        // computed directly (instead of in a LaunchedEffect) so that it always matches
+        // the current cell size, even while the board is being resized
+        val fontSizePx = with(LocalDensity.current) {
+            if (autoFontSize) {
+                (cellSize * 0.9f).toSp().toPx()
+            } else {
+                mainTextSize.toPx()
             }
         }
         val noteSizePx = with(LocalDensity.current) { (cellSizeDivWidth * 0.8f).toSp().toPx() }
@@ -218,7 +226,7 @@ fun Board(
         }
 
         val context = LocalContext.current
-        LaunchedEffect(mainTextSize, noteTextSize, boardColors) {
+        LaunchedEffect(mainTextSize, noteTextSize, boardColors, fontSizePx, noteSizePx) {
             textPaint = Paint().apply {
                 color = foregroundColor.toArgb()
                 isAntiAlias = true

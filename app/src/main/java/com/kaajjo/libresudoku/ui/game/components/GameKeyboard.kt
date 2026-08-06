@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,13 +28,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaajjo.libresudoku.core.qqwing.GameType
+import com.kaajjo.libresudoku.ui.components.board.BOARD_DIGIT_RADIX
 import com.kaajjo.libresudoku.ui.theme.LibreSudokuTheme
 import com.kaajjo.libresudoku.ui.util.LightDarkPreview
+
+/** Spacing between the keys of the keyboard */
+private val KeyboardSpacing = 2.dp
+
+/** Horizontal padding inside a single key */
+private val KeyHorizontalPadding = 4.dp
+
+/** Approximate width of a bold digit relative to its font size */
+private const val DigitWidthRatio = 0.62f
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -43,18 +57,15 @@ fun KeyboardItem(
     remainingUses: Int? = null,
     onClick: (Int) -> Unit,
     onLongClick: (Int) -> Unit = { },
-    selected: Boolean = false
+    selected: Boolean = false,
+    fontSize: TextUnit = defaultKeyboardFontSize(remainingUses != null),
+    scale: Float = 1f
 ) {
     val mutableInteractionSource by remember { mutableStateOf(MutableInteractionSource()) }
     val color by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Transparent
     )
     val localView = LocalView.current
-    val keyboardFontSize = if (remainingUses != null) {
-        25.sp
-    } else {
-        36.sp
-    }
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -76,23 +87,37 @@ fun KeyboardItem(
         contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.padding(7.dp),
+            modifier = Modifier.padding(
+                horizontal = KeyHorizontalPadding,
+                vertical = 7.dp * scale
+            ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
             Text(
-                text = number.toString(16).uppercase(),
+                text = number.toString(BOARD_DIGIT_RADIX).uppercase(),
                 fontWeight = FontWeight.Bold,
-                fontSize = keyboardFontSize,
+                fontSize = fontSize,
+                maxLines = 1
             )
             if (remainingUses != null) {
                 Text(
                     text = remainingUses.toString(),
-                    fontSize = 11.sp
+                    fontSize = 11.sp * scale
                 )
             }
         }
     }
+}
+
+/**
+ * Number of keys in a single keyboard row for a [size]x[size] game.
+ * 12x12 doesn't fit into one row, so it uses two rows.
+ */
+fun defaultKeyboardColumns(size: Int): Int = when (size) {
+    GameType.Default12x12.size -> 6
+    GameType.Default16x16.size -> 8
+    else -> size
 }
 
 @Composable
@@ -103,85 +128,92 @@ fun DefaultGameKeyboard(
     onClick: (Int) -> Unit,
     onLongClick: (Int) -> Unit,
     size: Int,
-    selected: Int = 0
+    selected: Int = 0,
+    columns: Int = defaultKeyboardColumns(size),
+    scale: Float = 1f
 ) {
-    val numbers by remember(size) { mutableStateOf((1..size).toList()) }
+    val keysInRow = columns.coerceIn(1, size)
+    val rows by remember(size, keysInRow) { mutableStateOf((1..size).toList().chunked(keysInRow)) }
 
-    Column(
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        if (size == GameType.Default12x12.size) {
-            // double-height keyboard only for 12x12
-            val chunkedNumbers = numbers.chunked(6)
-            if (chunkedNumbers.size == 2) {
-                chunkedNumbers.forEachIndexed { index, chunked ->
-                    AnimatedVisibility(
-                        visible =
-                        (remainingUses != null && remainingUses.chunked(6)[index].any { it > 0 }) ||
-                                remainingUses == null
-                    ) {
-                        KeyboardRow {
-                            chunked.forEach { number ->
-                                val hide =
-                                    remainingUses != null && (remainingUses.size > number && remainingUses[number - 1] <= 0)
-                                KeyboardItem(
-                                    modifier = itemModifier
-                                        .weight(1f)
-                                        .alpha(if (hide) 0f else 1f),
-                                    number = number,
-                                    onClick = {
-                                        if (!hide) {
-                                            onClick(number)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        if (!hide) {
-                                            onLongClick(number)
-                                        }
-                                    },
-                                    remainingUses = if (remainingUses != null && remainingUses.size >= number) {
-                                        remainingUses[number - 1]
-                                    } else {
-                                        null
-                                    },
-                                    selected = number == selected
-                                )
-                            }
+    BoxWithConstraints(modifier = modifier) {
+        // shrink the digits when the keys are too narrow to fit them, otherwise they
+        // get clipped by the round key background on small screens
+        val fontSize = fittingKeyboardFontSize(
+            keyWidth = if (maxWidth != Dp.Infinity) {
+                (maxWidth - KeyboardSpacing * (keysInRow - 1)) / keysInRow
+            } else {
+                Dp.Infinity
+            },
+            withRemainingUses = remainingUses != null,
+            scale = scale
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KeyboardSpacing)
+        ) {
+            rows.forEachIndexed { index, rowNumbers ->
+                // on a multi row keyboard a row without any number left to place is
+                // hidden entirely. A single row keyboard always stays visible
+                val rowVisible = remainingUses == null || rows.size == 1 ||
+                        remainingUses.chunked(keysInRow).getOrNull(index)?.any { it > 0 } != false
+                AnimatedVisibility(visible = rowVisible) {
+                    KeyboardRow {
+                        rowNumbers.forEach { number ->
+                            val hide =
+                                remainingUses != null && (remainingUses.size > number && remainingUses[number - 1] <= 0)
+                            KeyboardItem(
+                                modifier = itemModifier
+                                    .weight(1f)
+                                    .alpha(if (hide) 0f else 1f),
+                                number = number,
+                                onClick = {
+                                    if (!hide) {
+                                        onClick(number)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!hide) {
+                                        onLongClick(number)
+                                    }
+                                },
+                                remainingUses = if (remainingUses != null && remainingUses.size >= number) {
+                                    remainingUses[number - 1]
+                                } else {
+                                    null
+                                },
+                                selected = number == selected,
+                                fontSize = fontSize,
+                                scale = scale
+                            )
                         }
                     }
                 }
             }
-        } else {
-            KeyboardRow(modifier = modifier) {
-                numbers.forEach { number ->
-                    val hide =
-                        remainingUses != null && (remainingUses.size > number && remainingUses[number - 1] <= 0)
-                    KeyboardItem(
-                        modifier = itemModifier
-                            .weight(1f)
-                            .alpha(if (hide) 0f else 1f),
-                        number = number,
-                        onClick = {
-                            if (!hide) {
-                                onClick(number)
-                            }
-                        },
-                        onLongClick = {
-                            if (!hide) {
-                                onLongClick(number)
-                            }
-                        },
-                        remainingUses = if (remainingUses != null && remainingUses.size >= number) {
-                            remainingUses[number - 1]
-                        } else {
-                            null
-                        },
-                        selected = number == selected
-                    )
-                }
-            }
         }
     }
+}
+
+/** Font size of a key when there is enough room for it */
+@Composable
+private fun defaultKeyboardFontSize(withRemainingUses: Boolean, scale: Float = 1f): TextUnit =
+    (if (withRemainingUses) 25.sp else 36.sp) * scale
+
+/**
+ * Font size of a key that is guaranteed to fit into a key of [keyWidth].
+ * Returns the default size when the key is wide enough or when [keyWidth] is unbounded.
+ */
+@Composable
+private fun fittingKeyboardFontSize(
+    keyWidth: Dp,
+    withRemainingUses: Boolean,
+    scale: Float = 1f
+): TextUnit {
+    val default = defaultKeyboardFontSize(withRemainingUses, scale)
+    if (keyWidth == Dp.Infinity) return default
+
+    val availableForDigit = (keyWidth - KeyHorizontalPadding * 2).coerceAtLeast(0.dp)
+    val fitting = with(LocalDensity.current) { availableForDigit.toSp() } / DigitWidthRatio
+    return minOf(default.value, fitting.value).sp
 }
 
 @Composable
@@ -193,7 +225,7 @@ private fun KeyboardRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(KeyboardSpacing),
         verticalAlignment = Alignment.CenterVertically
     ) {
         content()

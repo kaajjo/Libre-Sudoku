@@ -8,7 +8,11 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class SudokuParser {
-    private val radix = 13
+    // has to be big enough for the largest board value to fit into a single character.
+    // 16x16 boards go up to 16, so 17 is the smallest radix that works.
+    // characters for 0..12 are the same as with the previous radix of 13, so boards and
+    // notes saved by older versions still parse correctly
+    private val radix = 17
     fun parseBoard(
         board: String,
         gameType: GameType,

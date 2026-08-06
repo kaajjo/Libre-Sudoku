@@ -17,6 +17,7 @@ class GameTypeConverter {
             GameType.Killer9x9 -> 4
             GameType.Killer12x12 -> 5
             GameType.Killer6x6 -> 6
+            GameType.Default16x16 -> 7
         }
     }
 
@@ -30,6 +31,7 @@ class GameTypeConverter {
             4 -> GameType.Killer9x9
             5 -> GameType.Killer12x12
             6 -> GameType.Killer6x6
+            7 -> GameType.Default16x16
             else -> GameType.Unspecified
         }
     }

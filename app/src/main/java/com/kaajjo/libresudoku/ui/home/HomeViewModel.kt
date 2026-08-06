@@ -51,20 +51,57 @@ class HomeViewModel
         GameDifficulty.Challenge,
     )
 
-    private val types = listOf(
-        GameType.Default9x9,
+    // QQWing's solving logic is not strong enough to crack a 16x16 board without guessing,
+    // so every generated 16x16 board rates as Challenge. Offering any other difficulty
+    // would make the generator spin forever looking for a board it can never produce.
+    private val challengeOnly = listOf(GameDifficulty.Challenge)
+
+    private fun difficultiesFor(type: GameType) =
+        if (type == GameType.Default16x16) challengeOnly else difficulties
+
+    // plain boards by size first, then the killer variants in the same order
+    val types = listOf(
         GameType.Default6x6,
+        GameType.Default9x9,
         GameType.Default12x12,
+        GameType.Default16x16,
+        GameType.Killer6x6,
         GameType.Killer9x9,
-        GameType.Killer12x12,
-        GameType.Killer6x6
+        GameType.Killer12x12
     )
 
     val lastSelectedGameDifficultyType = appSettingsManager.lastSelectedGameDifficultyType
     val saveSelectedGameDifficultyType = appSettingsManager.saveSelectedGameDifficultyType
 
-    var selectedDifficulty by mutableStateOf(difficulties.first())
-    var selectedType by mutableStateOf(types.first())
+    var selectedType by mutableStateOf(GameType.Default9x9)
+        private set
+    var selectedDifficulty by mutableStateOf(GameDifficulty.Easy)
+        private set
+
+    /** Difficulties that can be generated for the currently selected type */
+    val availableDifficulties: List<GameDifficulty>
+        get() = difficultiesFor(selectedType)
+
+    fun selectType(type: GameType) {
+        selectedType = type
+        // the new type may not support the currently selected difficulty
+        val available = difficultiesFor(type)
+        if (selectedDifficulty !in available) {
+            selectedDifficulty = available.first()
+        }
+    }
+
+    fun selectDifficulty(difficulty: GameDifficulty) {
+        if (difficulty in difficultiesFor(selectedType)) {
+            selectedDifficulty = difficulty
+        }
+    }
+
+    /** Restores a previously saved selection, ignoring combinations that cannot be generated */
+    fun restoreSelection(difficulty: GameDifficulty, type: GameType) {
+        selectType(if (type in types) type else GameType.Default9x9)
+        selectDifficulty(difficulty)
+    }
 
     var isGenerating by mutableStateOf(false)
     var isSolving by mutableStateOf(false)
@@ -144,20 +181,6 @@ class HomeViewModel
 
                 readyToPlay = true
             }
-        }
-    }
-
-    fun changeDifficulty(diff: Int) {
-        val indexToSet = difficulties.indexOf(selectedDifficulty) + diff
-        if (indexToSet >= 0 && indexToSet < difficulties.count()) {
-            selectedDifficulty = difficulties[indexToSet]
-        }
-    }
-
-    fun changeType(diff: Int) {
-        val indexToSet = types.indexOf(selectedType) + diff
-        if (indexToSet >= 0 && indexToSet < types.count()) {
-            selectedType = types[indexToSet]
         }
     }
 

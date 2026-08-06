@@ -16,14 +16,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,10 +85,17 @@ import com.kaajjo.libresudoku.ui.game.components.NotesMenu
 import com.kaajjo.libresudoku.ui.game.components.ToolBarItem
 import com.kaajjo.libresudoku.ui.game.components.ToolbarItem
 import com.kaajjo.libresudoku.ui.game.components.UndoRedoMenu
+import com.kaajjo.libresudoku.ui.game.components.defaultKeyboardColumns
 import com.kaajjo.libresudoku.ui.onboarding.FirstGameDialog
 import com.kaajjo.libresudoku.ui.util.ReverseArrangement
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+
+/** Share of the width taken by the control panel when it sits beside the board */
+private const val SideControlPanelWeight = 0.45f
+
+/** Keys per row of the number keyboard when it sits beside the board */
+private const val SideControlPanelKeyboardColumns = 3
 
 @Destination(
     style = AnimatedNavigation::class,
@@ -120,6 +131,28 @@ fun GameScreen(
     val funKeyboardOverNum by viewModel.funKeyboardOverNum.collectAsStateWithLifecycle(
         initialValue = PreferencesConstants.DEFAULT_FUN_KEYBOARD_OVER_NUM
     )
+    val hideGameInfoRow by viewModel.hideGameInfoRow.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_HIDE_GAME_INFO_ROW
+    )
+    val hideTopBarInGame by viewModel.hideTopBarInGame.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_HIDE_TOP_BAR_IN_GAME
+    )
+    val controlPanelPosition by viewModel.controlPanelPosition.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_CONTROL_PANEL_POSITION
+    )
+    val controlPanelScale by viewModel.controlPanelScale.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_CONTROL_PANEL_SCALE
+    )
+    val controlPanelScaleFactor = controlPanelScale / 100f
+
+    val showAppBarToggle by viewModel.showAppBarToggle.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_SHOW_APP_BAR_TOGGLE
+    )
+    // without the button in the function panel there would be no way of bringing the app
+    // bar back, so it can only be hidden while that button is there.
+    // it is also never hidden once the game is over, so that the back button and the
+    // solution button stay reachable when the function panel is replaced by the stats
+    val topBarHidden = showAppBarToggle && hideTopBarInGame && !viewModel.endGame
 
     val fontSizeFactor by viewModel.fontSize.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_FONT_SIZE_FACTOR)
     val fontSizeValue by remember(fontSizeFactor, viewModel.gameType) {
@@ -163,122 +196,122 @@ fun GameScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.popBackStack() }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_round_arrow_back_24),
-                            contentDescription = null
-                        )
-                    }
-                },
-                actions = {
-                    AnimatedVisibility(visible = viewModel.endGame && (viewModel.mistakesCount >= PreferencesConstants.MISTAKES_LIMIT || viewModel.giveUp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilledTonalButton(
-                                onClick = { viewModel.showSolution = !viewModel.showSolution }
+            if (!topBarHidden) {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.popBackStack() }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_round_arrow_back_24),
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    actions = {
+                        AnimatedVisibility(visible = viewModel.endGame && (viewModel.mistakesCount >= PreferencesConstants.MISTAKES_LIMIT || viewModel.giveUp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AnimatedContent(
-                                    if (viewModel.showSolution) stringResource(R.string.action_show_mine_sudoku)
-                                    else stringResource(R.string.action_show_solution),
-                                    label = "Show solution/mine button"
+                                FilledTonalButton(
+                                    onClick = { viewModel.showSolution = !viewModel.showSolution }
                                 ) {
-                                    Text(it)
+                                    AnimatedContent(
+                                        if (viewModel.showSolution) stringResource(R.string.action_show_mine_sudoku)
+                                        else stringResource(R.string.action_show_solution),
+                                        label = "Show solution/mine button"
+                                    ) {
+                                        Text(it)
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    AnimatedVisibility(visible = !viewModel.endGame) {
-                        val rotationAngle by animateFloatAsState(
-                            targetValue = if (viewModel.gamePlaying) 0f else 360f,
-                            label = "Play/Pause game icon rotation"
-                        )
-                        IconButton(onClick = {
-                            if (!viewModel.gamePlaying) viewModel.startTimer() else viewModel.pauseTimer()
-                            viewModel.currCell = Cell(-1, -1, 0)
-                        }) {
-                            Icon(
-                                modifier = Modifier.rotate(rotationAngle),
-                                painter = painterResource(
-                                    if (viewModel.gamePlaying) {
-                                        R.drawable.ic_round_pause_24
-                                    } else {
-                                        R.drawable.ic_round_play_24
-                                    }
-                                ),
-                                contentDescription = null
+                        AnimatedVisibility(visible = !viewModel.endGame) {
+                            val rotationAngle by animateFloatAsState(
+                                targetValue = if (viewModel.gamePlaying) 0f else 360f,
+                                label = "Play/Pause game icon rotation"
                             )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = !viewModel.endGame) {
-                        IconButton(onClick = { viewModel.restartDialog = true }) {
-                            Icon(
-                                modifier = Modifier.rotate(restartButtonAnimation),
-                                painter = painterResource(R.drawable.ic_round_replay_24),
-                                contentDescription = null
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = !viewModel.endGame) {
-                        Box {
-                            IconButton(onClick = { viewModel.showMenu = !viewModel.showMenu }) {
+                            IconButton(onClick = {
+                                if (!viewModel.gamePlaying) viewModel.startTimer() else viewModel.pauseTimer()
+                                viewModel.currCell = Cell(-1, -1, 0)
+                            }) {
                                 Icon(
-                                    Icons.Default.MoreVert,
+                                    modifier = Modifier.rotate(rotationAngle),
+                                    painter = painterResource(
+                                        if (viewModel.gamePlaying) {
+                                            R.drawable.ic_round_pause_24
+                                        } else {
+                                            R.drawable.ic_round_play_24
+                                        }
+                                    ),
                                     contentDescription = null
                                 )
                             }
-                            GameMenu(
-                                expanded = viewModel.showMenu,
-                                onDismiss = { viewModel.showMenu = false },
-                                onGiveUpClick = {
-                                    viewModel.pauseTimer()
-                                    viewModel.giveUpDialog = true
-                                },
-                                onSettingsClick = {
-                                    navigator.navigate(
-                                        SettingsCategoriesScreenDestination(
-                                            launchedFromGame = true
-                                        )
-                                    )
-                                    viewModel.showMenu = false
-                                },
-                                onExportClick = {
-                                    val stringBoard = SudokuParser().boardToString(
-                                        viewModel.gameBoard,
-                                        emptySeparator = '.'
-                                    )
-                                    clipboardManager.setText(
-                                        AnnotatedString(
-                                            stringBoard.uppercase()
-                                        )
-                                    )
+                        }
 
-                                    if (SDK_INT < 33) {
-                                        Toast.makeText(
-                                            context,
-                                            R.string.export_string_state_copied,
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                        AnimatedVisibility(visible = !viewModel.endGame) {
+                            IconButton(onClick = { viewModel.restartDialog = true }) {
+                                Icon(
+                                    modifier = Modifier.rotate(restartButtonAnimation),
+                                    painter = painterResource(R.drawable.ic_round_replay_24),
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                        AnimatedVisibility(visible = !viewModel.endGame) {
+                            Box {
+                                IconButton(onClick = { viewModel.showMenu = !viewModel.showMenu }) {
+                                    Icon(
+                                        Icons.Default.MoreVert,
+                                        contentDescription = null
+                                    )
                                 }
-                            )
+                                GameMenu(
+                                    expanded = viewModel.showMenu,
+                                    onDismiss = { viewModel.showMenu = false },
+                                    onGiveUpClick = {
+                                        viewModel.pauseTimer()
+                                        viewModel.giveUpDialog = true
+                                    },
+                                    onSettingsClick = {
+                                        navigator.navigate(
+                                            SettingsCategoriesScreenDestination(
+                                                launchedFromGame = true
+                                            )
+                                        )
+                                        viewModel.showMenu = false
+                                    },
+                                    onExportClick = {
+                                        val stringBoard = SudokuParser().boardToString(
+                                            viewModel.gameBoard,
+                                            emptySeparator = '.'
+                                        )
+                                        clipboardManager.setText(
+                                            AnnotatedString(
+                                                stringBoard.uppercase()
+                                            )
+                                        )
+
+                                        if (SDK_INT < 33) {
+                                            Toast.makeText(
+                                                context,
+                                                R.string.export_string_state_copied,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { scaffoldPaddings ->
-        Column(
-            modifier = Modifier
-                .padding(scaffoldPaddings)
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.SpaceEvenly
-        ) {
+        // kept outside of the layout branches so that it survives switching between them
+        var renderNotes by remember { mutableStateOf(true) }
+
+        val infoRow: @Composable () -> Unit = {
             AnimatedVisibility(visible = !viewModel.endGame) {
                 Row(
                     modifier = Modifier
@@ -307,13 +340,15 @@ fun GameScreen(
                     }
                 }
             }
+        }
 
-            var renderNotes by remember { mutableStateOf(true) }
-
+        val boardSection: @Composable (boardModifier: Modifier) -> Unit = { boardModifier ->
             Box(
                 modifier = Modifier
+                    .then(boardModifier)
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Column(
                     modifier = Modifier.align(Alignment.Center)
@@ -368,13 +403,19 @@ fun GameScreen(
                     enabled = viewModel.gamePlaying && !viewModel.endGame,
                     questions = !(viewModel.gamePlaying || viewModel.endGame) && SDK_INT < Build.VERSION_CODES.R,
                     renderNotes = renderNotes && !viewModel.showSolution,
-                    zoomable = viewModel.gameType == GameType.Default12x12 || viewModel.gameType == GameType.Killer12x12,
+                    zoomable = viewModel.gameType in setOf(
+                        GameType.Default12x12,
+                        GameType.Killer12x12,
+                        GameType.Default16x16
+                    ),
                     crossHighlight = crossHighlight,
                     cages = viewModel.cages,
                     cellsToHighlight = if (advancedHintMode && advancedHintData != null) advancedHintData!!.helpCells + advancedHintData!!.targetCell else null
                 )
             }
+        }
 
+        val controlsSection: @Composable (keyboardColumns: Int) -> Unit = { keyboardColumns ->
             AnimatedContent(advancedHintMode) { targetState ->
                 if (targetState) {
                     advancedHintData?.let { hintData ->
@@ -423,6 +464,8 @@ fun GameScreen(
                             ) {
                                 DefaultGameKeyboard(
                                     size = viewModel.size,
+                                    columns = keyboardColumns,
+                                    scale = controlPanelScaleFactor,
                                     remainingUses = if (remainingUse) viewModel.remainingUsesList else null,
                                     onClick = {
                                         viewModel.processInputKeyboard(number = it)
@@ -450,7 +493,8 @@ fun GameScreen(
                                         ToolbarItem(
                                             painter = painterResource(R.drawable.ic_round_undo_24),
                                             onClick = { viewModel.toolbarClick(ToolBarItem.Undo) },
-                                            onLongClick = { viewModel.showUndoRedoMenu = true }
+                                            onLongClick = { viewModel.showUndoRedoMenu = true },
+                                            scale = controlPanelScaleFactor
                                         )
 
                                     }
@@ -461,7 +505,8 @@ fun GameScreen(
                                         ToolbarItem(
                                             modifier = Modifier.weight(1f),
                                             painter = painterResource(R.drawable.ic_lightbulb_stars_24),
-                                            onClick = { viewModel.toolbarClick(ToolBarItem.Hint) }
+                                            onClick = { viewModel.toolbarClick(ToolBarItem.Hint) },
+                                            scale = controlPanelScaleFactor
                                         )
                                     }
 
@@ -487,7 +532,8 @@ fun GameScreen(
                                                     )
                                                     viewModel.showNotesMenu = true
                                                 }
-                                            }
+                                            },
+                                            scale = controlPanelScaleFactor
                                         )
 
                                     }
@@ -505,8 +551,23 @@ fun GameScreen(
                                                 )
                                                 viewModel.toggleEraseButton()
                                             }
-                                        }
+                                        },
+                                        scale = controlPanelScaleFactor
                                     )
+                                    if (showAppBarToggle) {
+                                        ToolbarItem(
+                                            modifier = Modifier.weight(1f),
+                                            painter = rememberVectorPainter(
+                                                if (topBarHidden) {
+                                                    Icons.Rounded.FullscreenExit
+                                                } else {
+                                                    Icons.Rounded.Fullscreen
+                                                }
+                                            ),
+                                            onClick = { viewModel.toggleAppBar(!hideTopBarInGame) },
+                                            scale = controlPanelScaleFactor
+                                        )
+                                    }
                                     if (advancedHintEnabled) {
                                         ToolbarItem(
                                             modifier = Modifier.weight(1f),
@@ -515,7 +576,8 @@ fun GameScreen(
                                                 if (viewModel.gamePlaying) {
                                                     viewModel.getAdvancedHint()
                                                 }
-                                            }
+                                            },
+                                            scale = controlPanelScaleFactor
                                         )
                                     }
                                 }
@@ -540,6 +602,58 @@ fun GameScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .padding(scaffoldPaddings)
+                .padding(horizontal = 12.dp)
+        ) {
+            // beside the board only when that actually makes the board bigger, i.e. when
+            // the window is wider than it is tall. Otherwise the panel eats the width that
+            // the board is limited by anyway
+            // the after game stats and the advanced hint are text heavy, they need the
+            // full width and are always shown below the board
+            val sideControlPanel = !viewModel.endGame && !advancedHintMode &&
+                    when (controlPanelPosition) {
+                        PreferencesConstants.CONTROL_PANEL_POSITION_BOTTOM -> false
+                        PreferencesConstants.CONTROL_PANEL_POSITION_SIDE -> true
+                        else -> maxWidth > maxHeight
+                    }
+
+            if (sideControlPanel) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (!hideGameInfoRow) {
+                            infoRow()
+                        }
+                        boardSection(Modifier.weight(1f, fill = false))
+                    }
+                    Column(
+                        modifier = Modifier.weight(SideControlPanelWeight),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        controlsSection(SideControlPanelKeyboardColumns)
+                    }
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    if (!hideGameInfoRow) {
+                        infoRow()
+                    }
+                    boardSection(Modifier.weight(1f, fill = false))
+                    controlsSection(defaultKeyboardColumns(viewModel.size))
                 }
             }
         }

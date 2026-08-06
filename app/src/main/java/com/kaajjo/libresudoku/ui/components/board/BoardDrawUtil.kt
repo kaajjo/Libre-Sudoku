@@ -17,6 +17,12 @@ import com.kaajjo.libresudoku.core.Note
 import kotlin.math.floor
 import kotlin.math.sqrt
 
+/**
+ * Radix used to render a cell value as a single character.
+ * Has to be larger than the biggest board value (16 on a 16x16 board)
+ */
+internal const val BOARD_DIGIT_RADIX = 17
+
 fun DrawScope.drawRoundCell(
     row: Int,
     col: Int,
@@ -59,7 +65,7 @@ fun DrawScope.drawNotes(
 
     drawIntoCanvas { canvas ->
         notes.forEach { note ->
-            val textToDraw = note.value.toString(16).uppercase()
+            val textToDraw = note.value.toString(BOARD_DIGIT_RADIX).uppercase()
             val noteTextMeasure = paint.measureText(textToDraw)
 
             val noteCol = getNoteColumnNumber(note.value, size)
@@ -114,7 +120,7 @@ fun DrawScope.drawNumbers(
                     }
 
                     val textToDraw =
-                        if (questions) "?" else board[i][j].value.toString(16).uppercase()
+                        if (questions) "?" else board[i][j].value.toString(BOARD_DIGIT_RADIX).uppercase()
                     val textBounds = android.graphics.Rect()
                     textPaint.getTextBounds(textToDraw, 0, 1, textBounds)
                     val textWidth = paint.measureText(textToDraw)

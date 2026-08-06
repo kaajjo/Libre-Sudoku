@@ -5,9 +5,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.HistoryToggleOff
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.SmartButton
+import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.SwitchAccessShortcut
+import androidx.compose.material.icons.automirrored.outlined.ViewSidebar
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +41,14 @@ fun SettingsGameplayScreen(
     navigator: DestinationsNavigator
 ) {
     var inputMethodDialog by rememberSaveable { mutableStateOf(false) }
+    var controlPanelPositionDialog by rememberSaveable { mutableStateOf(false) }
+    var controlPanelScaleDialog by rememberSaveable { mutableStateOf(false) }
+
+    val controlPanelPositionNames = listOf(
+        stringResource(R.string.pref_control_panel_position_auto),
+        stringResource(R.string.pref_control_panel_position_bottom),
+        stringResource(R.string.pref_control_panel_position_side)
+    )
 
     val inputMethod by viewModel.inputMethod.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_INPUT_METHOD)
     val mistakesLimit by viewModel.mistakesLimit.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_MISTAKES_LIMIT)
@@ -45,6 +57,18 @@ fun SettingsGameplayScreen(
     val resetTimer by viewModel.canResetTimer.collectAsStateWithLifecycle(initialValue = PreferencesConstants.DEFAULT_GAME_RESET_TIMER)
     val funKeyboardOverNum by viewModel.funKeyboardOverNum.collectAsStateWithLifecycle(
         initialValue = PreferencesConstants.DEFAULT_FUN_KEYBOARD_OVER_NUM
+    )
+    val hideGameInfoRow by viewModel.hideGameInfoRow.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_HIDE_GAME_INFO_ROW
+    )
+    val showAppBarToggle by viewModel.showAppBarToggle.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_SHOW_APP_BAR_TOGGLE
+    )
+    val controlPanelScale by viewModel.controlPanelScale.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_CONTROL_PANEL_SCALE
+    )
+    val controlPanelPosition by viewModel.controlPanelPosition.collectAsStateWithLifecycle(
+        initialValue = PreferencesConstants.DEFAULT_CONTROL_PANEL_POSITION
     )
 
     SettingsScaffoldLazyColumn(
@@ -118,6 +142,76 @@ fun SettingsGameplayScreen(
                     painter = rememberVectorPainter(Icons.Outlined.SwitchAccessShortcut)
                 )
             }
+
+            item {
+                PreferenceRow(
+                    title = stringResource(R.string.pref_control_panel_position),
+                    subtitle = controlPanelPositionNames[
+                        controlPanelPosition.coerceIn(controlPanelPositionNames.indices)
+                    ],
+                    onClick = { controlPanelPositionDialog = true },
+                    painter = rememberVectorPainter(Icons.AutoMirrored.Outlined.ViewSidebar)
+                )
+            }
+
+            item {
+                PreferenceRow(
+                    title = stringResource(R.string.pref_control_panel_scale),
+                    subtitle = stringResource(
+                        R.string.pref_control_panel_scale_value,
+                        controlPanelScale
+                    ),
+                    onClick = { controlPanelScaleDialog = true },
+                    painter = rememberVectorPainter(Icons.Outlined.FormatSize)
+                )
+            }
+
+            item {
+                PreferenceRowSwitch(
+                    title = stringResource(R.string.pref_hide_game_info_row),
+                    subtitle = stringResource(R.string.pref_hide_game_info_row_subtitle),
+                    checked = hideGameInfoRow,
+                    onClick = { viewModel.updateHideGameInfoRow(!hideGameInfoRow) },
+                    painter = rememberVectorPainter(Icons.Outlined.Straighten)
+                )
+            }
+
+            item {
+                PreferenceRowSwitch(
+                    title = stringResource(R.string.pref_show_app_bar_toggle),
+                    subtitle = stringResource(R.string.pref_show_app_bar_toggle_subtitle),
+                    checked = showAppBarToggle,
+                    onClick = { viewModel.updateShowAppBarToggle(!showAppBarToggle) },
+                    painter = rememberVectorPainter(Icons.Outlined.SmartButton)
+                )
+            }
+        }
+
+        if (controlPanelPositionDialog) {
+            SelectionDialog(
+                title = stringResource(R.string.pref_control_panel_position),
+                selections = controlPanelPositionNames,
+                selected = controlPanelPosition.coerceIn(controlPanelPositionNames.indices),
+                onSelect = { index ->
+                    viewModel.updateControlPanelPosition(index)
+                },
+                onDismiss = { controlPanelPositionDialog = false }
+            )
+        }
+
+        if (controlPanelScaleDialog) {
+            val scaleValues = PreferencesConstants.CONTROL_PANEL_SCALE_VALUES
+            SelectionDialog(
+                title = stringResource(R.string.pref_control_panel_scale),
+                selections = scaleValues.map {
+                    stringResource(R.string.pref_control_panel_scale_value, it)
+                },
+                selected = scaleValues.indexOf(controlPanelScale).coerceAtLeast(0),
+                onSelect = { index ->
+                    viewModel.updateControlPanelScale(scaleValues[index])
+                },
+                onDismiss = { controlPanelScaleDialog = false }
+            )
         }
 
         if (inputMethodDialog) {
