@@ -254,6 +254,7 @@ class CreateSudokuViewModel @Inject constructor(
                 36 -> GameType.Default6x6
                 81 -> GameType.Default9x9
                 144 -> GameType.Default12x12
+                256 -> GameType.Default16x16
                 else -> GameType.Default9x9
             }
             gameBoard = sudokuParser.parseBoard(

@@ -2,6 +2,7 @@ package com.kaajjo.libresudoku.ui.home
 
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -18,19 +19,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,7 +53,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -90,8 +99,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel(), navigator: Destinatio
     LaunchedEffect(saveSelectedGameDifficultyType) {
         if (saveSelectedGameDifficultyType) {
             val (difficulty, type) = lastSelectedGameDifficultyType
-            viewModel.selectedDifficulty = difficulty
-            viewModel.selectedType = type
+            viewModel.restoreSelection(difficulty, type)
         }
     }
 
@@ -121,31 +129,38 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel(), navigator: Destinatio
                     style = MaterialTheme.typography.headlineLarge
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                HorizontalPicker(
-                        text = stringResource(viewModel.selectedDifficulty.resName),
-                        onLeftClick = { viewModel.changeDifficulty(-1) },
-                        onRightClick = { viewModel.changeDifficulty(1) }
+                GameOptionDropdown(
+                        label = stringResource(R.string.label_game_type),
+                        options = viewModel.types,
+                        selected = viewModel.selectedType,
+                        optionName = { stringResource(it.resName) },
+                        onSelect = { viewModel.selectType(it) }
                 )
-                HorizontalPicker(
-                        text = stringResource(viewModel.selectedType.resName),
-                        onLeftClick = { viewModel.changeType(-1) },
-                        onRightClick = { viewModel.changeType(1) }
+                Spacer(Modifier.height(8.dp))
+                GameOptionDropdown(
+                        label = stringResource(R.string.label_difficulty),
+                        options = viewModel.availableDifficulties,
+                        selected = viewModel.selectedDifficulty,
+                        optionName = { stringResource(it.resName) },
+                        onSelect = { viewModel.selectDifficulty(it) }
                 )
 
                 Spacer(Modifier.height(12.dp))
 
-                if (lastGame != null && !lastGame!!.completed) {
+                // driven by the games that can actually be continued, not by the most
+                // recently created one. Finishing a new game must not hide the button
+                // for an older game that was never completed
+                if (lastGames.isNotEmpty()) {
                     Button(
                             onClick = {
-                                if (lastGames.size <= 1) {
-                                    lastGame?.let {
-                                        navigator.navigate(
-                                                GameScreenDestination(
-                                                        gameUid = it.uid,
-                                                        playedBefore = true
-                                                )
-                                        )
-                                    }
+                                val onlyGame = lastGames.keys.singleOrNull()
+                                if (onlyGame != null) {
+                                    navigator.navigate(
+                                            GameScreenDestination(
+                                                    gameUid = onlyGame.uid,
+                                                    playedBefore = true
+                                            )
+                                    )
                                 } else {
                                     lastGamesBottomSheet = true
                                 }
@@ -258,33 +273,68 @@ fun GeneratingDialog(onDismiss: () -> Unit, text: String) {
 }
 
 @Composable
-fun HorizontalPicker(
-        modifier: Modifier = Modifier,
-        text: String,
-        onLeftClick: () -> Unit,
-        onRightClick: () -> Unit
+private fun <T> GameOptionDropdown(
+        label: String,
+        options: List<T>,
+        selected: T,
+        optionName: @Composable (T) -> String,
+        onSelect: (T) -> Unit,
+        modifier: Modifier = Modifier
 ) {
-    Row(
-            modifier = modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 36.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        IconButton(onClick = onLeftClick) {
-            Icon(
-                    painter = painterResource(R.drawable.ic_round_keyboard_arrow_left_24),
-                    contentDescription = null
-            )
-        }
-        AnimatedContent(
-                targetState = text,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "Animated text"
-        ) { text -> Text(text) }
-        IconButton(onClick = onRightClick) {
-            Icon(
-                    painter = painterResource(R.drawable.ic_round_keyboard_arrow_right_24),
-                    contentDescription = null
-            )
+    var expanded by remember { mutableStateOf(false) }
+    val arrowRotation by animateFloatAsState(
+            targetValue = if (expanded) 180f else 0f,
+            label = "Dropdown arrow"
+    )
+
+    Column(modifier = modifier.widthIn(max = 320.dp).fillMaxWidth().padding(horizontal = 24.dp)) {
+        Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        )
+        Box {
+            OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                        text = optionName(selected),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Start
+                )
+                Icon(
+                        imageVector = Icons.Rounded.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier.rotate(arrowRotation)
+                )
+            }
+            MaterialTheme(
+                    shapes = MaterialTheme.shapes.copy(extraSmall = MaterialTheme.shapes.large)
+            ) {
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                                text = { Text(optionName(option)) },
+                                onClick = {
+                                    onSelect(option)
+                                    expanded = false
+                                },
+                                trailingIcon = {
+                                    if (option == selected) {
+                                        Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null
+                                        )
+                                    }
+                                }
+                        )
+                    }
+                }
+            }
         }
     }
 }

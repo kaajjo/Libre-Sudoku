@@ -46,6 +46,7 @@ fun getSectionHeightForSize(size: Int): Int {
         6 -> GameType.Default6x6.sectionHeight
         9 -> GameType.Default9x9.sectionHeight
         12 -> GameType.Default12x12.sectionHeight
+        16 -> GameType.Default16x16.sectionHeight
         else -> GameType.Default9x9.sectionHeight
     }
 }
@@ -55,6 +56,7 @@ fun getSectionWidthForSize(size: Int): Int {
         6 -> GameType.Default6x6.sectionWidth
         9 -> GameType.Default9x9.sectionWidth
         12 -> GameType.Default12x12.sectionWidth
+        16 -> GameType.Default16x16.sectionWidth
         else -> GameType.Default9x9.sectionWidth
     }
 }

@@ -23,6 +23,7 @@
     <string name="type_default_6x6">6x6</string>
     <string name="type_default_9x9">9x9</string>
     <string name="type_default_12x12">12x12</string>
+    <string name="type_default_16x16">16x16</string>
     <string name="type_killer_9x9">Killer 9x9</string>
     <string name="type_killer_6x6">Killer 6x6</string>
     <string name="type_killer_12x12">Killer 12x12</string>
@@ -74,10 +75,14 @@
     <string name="pref_auto_erase_notes">Auto erase notes</string>
     <string name="pref_other">Other</string>
     <string name="pref_keep_screen_on">Keep screen awake</string>
+    <string name="pref_full_screen">Fullscreen</string>
+    <string name="pref_full_screen_subtitle">Hides the Android status bar. Swipe from the top edge to show it temporarily</string>
     <string name="pref_reset_tipcards">Reset all tutorial tips</string>
     <string name="pref_tipcards_reset">Tutorial tips reset!</string>
     <string name="pref_app_language">App language</string>
     <string name="label_default">Default</string>
+    <string name="label_difficulty">Difficulty</string>
+    <string name="label_game_type">Sudoku type</string>
     <string name="about_version">Version</string>
     <string name="about_github_project" translatable="false">GitHub</string>
     <string name="about_github_source_code">Source code on GitHub</string>
@@ -272,6 +277,18 @@
     <string name="pref_crash_reporting_subtitle">Help us fix bugs. The app doesn\'t send logs automatically; you will be prompted to send a crash report via email.</string>
     <string name="pref_fun_keyboard_over_num">Function panel above numbers</string>
     <string name="pref_fun_keyboard_over_num_subtitle">Places the function panel above the number keyboard</string>
+    <string name="pref_hide_game_info_row">Hide game info</string>
+    <string name="pref_hide_game_info_row_subtitle">Hides the difficulty, mistakes and timer row to make the board bigger</string>
+    <string name="pref_show_app_bar_toggle">App bar button</string>
+    <string name="pref_show_app_bar_toggle_subtitle">Adds a button to the function panel that shows and hides the app bar. When off, the app bar is always visible</string>
+    <string name="pref_control_panel_scale">Control panel size</string>
+    <string name="pref_control_panel_scale_value">%1$d%%</string>
+    <string name="pref_control_panel_position">Control panel position</string>
+    <string name="pref_control_panel_position_auto">Automatic</string>
+    <string name="pref_control_panel_position_auto_subtitle">Beside the board when the screen is wider than tall</string>
+    <string name="pref_control_panel_position_bottom">Below the board</string>
+    <string name="pref_control_panel_position_side">Beside the board</string>
+    <string name="game_toggle_app_bar">Show or hide app bar</string>
     <string name="pref_date_format">Date format</string>
     <string name="pref_save_last_diff_and_type">Remember type and difficulty</string>
     <string name="pref_save_last_diff_and_type_subtitle">Remember the last game\'s type and difficulty</string>

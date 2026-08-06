@@ -259,6 +259,7 @@ fun GamesHistoryScreen(
                             GameType.Default12x12,
                             GameType.Killer9x9,
                             GameType.Killer12x12,
+                            GameType.Default16x16,
                             GameType.Killer6x6
                         )
                     ) {

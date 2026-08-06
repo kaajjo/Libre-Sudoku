@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +86,21 @@ class MainActivity : AppCompatActivity() {
             val paletteStyle by mainViewModel.paletteStyle.collectAsStateWithLifecycle(initialValue = PaletteStyle.TonalSpot)
             val autoUpdateChannel by mainViewModel.autoUpdateChannel.collectAsStateWithLifecycle(UpdateChannel.Disabled)
             val updateDismissedName by mainViewModel.updateDismissedName.collectAsStateWithLifecycle("")
+            val fullScreen by mainViewModel.fullScreen.collectAsStateWithLifecycle(
+                PreferencesConstants.DEFAULT_FULL_SCREEN
+            )
+
+            LaunchedEffect(fullScreen) {
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                // swiping from the top edge brings the bar back temporarily
+                insetsController.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (fullScreen) {
+                    insetsController.hide(WindowInsetsCompat.Type.statusBars())
+                } else {
+                    insetsController.show(WindowInsetsCompat.Type.statusBars())
+                }
+            }
 
             LibreSudokuTheme(
                 darkTheme = when (darkTheme) {
@@ -200,6 +217,7 @@ class MainActivityViewModel
     val paletteStyle = themeSettingsManager.themePaletteStyle
     val autoUpdateChannel = appSettingsManager.autoUpdateChannel
     val updateDismissedName = appSettingsManager.updateDismissedName
+    val fullScreen = appSettingsManager.fullScreen
 }
 
 @Destination(

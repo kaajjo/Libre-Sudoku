@@ -192,7 +192,10 @@ fun CreateSudokuScreen(
             val positionLines by viewModel.positionLines.collectAsState(initial = PreferencesConstants.DEFAULT_POSITION_LINES)
             val crossHighlight by viewModel.crossHighlight.collectAsState(initial = PreferencesConstants.DEFAULT_BOARD_CROSS_HIGHLIGHT)
             Board(
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = Modifier
+                    // measured last, gets only the space left by the keyboard and the toolbar
+                    .weight(1f, fill = false)
+                    .padding(vertical = 12.dp),
                 size = viewModel.gameType.size,
                 mainTextSize = fontSizeValue,
                 autoFontSize = fontSizeFactor == 0,
@@ -315,6 +318,7 @@ fun GameTypeMenu(
         GameType.Default9x9,
         GameType.Default6x6,
         GameType.Default12x12,
+        GameType.Default16x16,
     ),
     onClick: (GameType) -> Unit
 ) {

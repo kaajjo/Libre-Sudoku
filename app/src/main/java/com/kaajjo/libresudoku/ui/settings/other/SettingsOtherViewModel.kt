@@ -29,6 +29,13 @@ class SettingsOtherViewModel @Inject constructor(
         }
     }
 
+    val fullScreen = settings.fullScreen
+    fun updateFullScreen(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.setFullScreen(enabled)
+        }
+    }
+
     fun resetTipCards() {
         viewModelScope.launch {
             tipCardsDataStore.setStreakCard(true)

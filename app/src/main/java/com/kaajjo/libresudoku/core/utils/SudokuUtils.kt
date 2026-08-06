@@ -162,6 +162,14 @@ class SudokuUtils {
                     else -> 24.sp
                 }
             }
+
+            GameType.Default16x16 -> {
+                when (factor) {
+                    2 -> 20.sp
+                    3 -> 26.sp
+                    else -> 14.sp
+                }
+            }
         }
     }
 }

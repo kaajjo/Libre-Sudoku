@@ -69,11 +69,29 @@ class AppSettingsManager(context: Context) {
     // keep screen on
     private val keepScreenOnKey = booleanPreferencesKey("keep_screen_on")
 
+    // hide the android status bar
+    private val fullScreenKey = booleanPreferencesKey("full_screen")
+
     // first game
     private val firstGameKey = booleanPreferencesKey("first_game")
 
     // place function keyboard (undo, erase etc.) above the numbers keyboard
     private val funKeyboardOverNumKey = booleanPreferencesKey("fun_keyboard_over_numbers")
+
+    // hide the difficulty/mistakes/timer row above the board
+    private val hideGameInfoRowKey = booleanPreferencesKey("hide_game_info_row")
+
+    // hide the app bar while the game is running
+    private val hideTopBarInGameKey = booleanPreferencesKey("hide_top_bar_in_game")
+
+    // show a button in the function keyboard that shows/hides the app bar
+    private val showAppBarToggleKey = booleanPreferencesKey("show_app_bar_toggle")
+
+    // size of the numbers keyboard and the function keyboard, in percent
+    private val controlPanelScaleKey = intPreferencesKey("control_panel_scale")
+
+    // where to place the keyboards (0 - automatic, 1 - bottom, 2 - side)
+    private val controlPanelPositionKey = intPreferencesKey("control_panel_position")
 
     // custom date format
     private val dateFormatKey = stringPreferencesKey("date_format")
@@ -238,6 +256,16 @@ class AppSettingsManager(context: Context) {
         preferences[keepScreenOnKey] ?: PreferencesConstants.DEFAULT_KEEP_SCREEN_ON
     }
 
+    suspend fun setFullScreen(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[fullScreenKey] = enabled
+        }
+    }
+
+    val fullScreen = dataStore.data.map { preferences ->
+        preferences[fullScreenKey] ?: PreferencesConstants.DEFAULT_FULL_SCREEN
+    }
+
     suspend fun setFirstGame(value: Boolean) {
         dataStore.edit { settings ->
             settings[firstGameKey] = value
@@ -256,6 +284,56 @@ class AppSettingsManager(context: Context) {
 
     val funKeyboardOverNumbers = dataStore.data.map { prefs ->
         prefs[funKeyboardOverNumKey] ?: PreferencesConstants.DEFAULT_FUN_KEYBOARD_OVER_NUM
+    }
+
+    suspend fun setHideGameInfoRow(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[hideGameInfoRowKey] = enabled
+        }
+    }
+
+    val hideGameInfoRow = dataStore.data.map { prefs ->
+        prefs[hideGameInfoRowKey] ?: PreferencesConstants.DEFAULT_HIDE_GAME_INFO_ROW
+    }
+
+    suspend fun setHideTopBarInGame(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[hideTopBarInGameKey] = enabled
+        }
+    }
+
+    val hideTopBarInGame = dataStore.data.map { prefs ->
+        prefs[hideTopBarInGameKey] ?: PreferencesConstants.DEFAULT_HIDE_TOP_BAR_IN_GAME
+    }
+
+    suspend fun setShowAppBarToggle(enabled: Boolean) {
+        dataStore.edit { settings ->
+            settings[showAppBarToggleKey] = enabled
+        }
+    }
+
+    val showAppBarToggle = dataStore.data.map { prefs ->
+        prefs[showAppBarToggleKey] ?: PreferencesConstants.DEFAULT_SHOW_APP_BAR_TOGGLE
+    }
+
+    suspend fun setControlPanelScale(value: Int) {
+        dataStore.edit { settings ->
+            settings[controlPanelScaleKey] = value
+        }
+    }
+
+    val controlPanelScale = dataStore.data.map { prefs ->
+        prefs[controlPanelScaleKey] ?: PreferencesConstants.DEFAULT_CONTROL_PANEL_SCALE
+    }
+
+    suspend fun setControlPanelPosition(value: Int) {
+        dataStore.edit { settings ->
+            settings[controlPanelPositionKey] = value
+        }
+    }
+
+    val controlPanelPosition = dataStore.data.map { prefs ->
+        prefs[controlPanelPositionKey] ?: PreferencesConstants.DEFAULT_CONTROL_PANEL_POSITION
     }
 
     suspend fun setDateFormat(format: String) {
@@ -305,6 +383,7 @@ class AppSettingsManager(context: Context) {
                 GameType.Killer9x9 -> "4"
                 GameType.Killer12x12 -> "5"
                 GameType.Killer6x6 -> "6"
+                GameType.Default16x16 -> "7"
             }
             settings[lastSelectedGameDifficultyTypeKey] = difficultyAndType
         }
@@ -337,6 +416,7 @@ class AppSettingsManager(context: Context) {
                 "4" -> GameType.Killer9x9
                 "5" -> GameType.Killer12x12
                 "6" -> GameType.Killer6x6
+                "7" -> GameType.Default16x16
                 else -> GameType.Default9x9
             }
         }

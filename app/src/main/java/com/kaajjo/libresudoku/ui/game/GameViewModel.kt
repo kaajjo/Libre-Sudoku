@@ -130,7 +130,9 @@ class GameViewModel @Inject constructor(
     val fontSize = appSettingsManager.fontSize
     val keepScreenOn = appSettingsManager.keepScreenOn
 
-    var remainingUsesList = emptyList<Int>()
+    // has to be observable state, otherwise the keyboard keeps showing the counts from
+    // the last recomposition and only catches up when some other state changes
+    var remainingUsesList by mutableStateOf(emptyList<Int>())
     val firstGame = appSettingsManager.firstGame
     private lateinit var boardEntity: SudokuBoard
     var size by mutableIntStateOf(9)
@@ -162,6 +164,19 @@ class GameViewModel @Inject constructor(
     var positionLines = appSettingsManager.positionLines
     val crossHighlight = themeSettingsManager.boardCrossHighlight
     val funKeyboardOverNum = appSettingsManager.funKeyboardOverNumbers
+
+    // board size related settings
+    val hideGameInfoRow = appSettingsManager.hideGameInfoRow
+    val hideTopBarInGame = appSettingsManager.hideTopBarInGame
+    val showAppBarToggle = appSettingsManager.showAppBarToggle
+    val controlPanelScale = appSettingsManager.controlPanelScale
+    val controlPanelPosition = appSettingsManager.controlPanelPosition
+
+    fun toggleAppBar(hidden: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            appSettingsManager.setHideTopBarInGame(hidden)
+        }
+    }
 
     var mistakesLimit = appSettingsManager.mistakesLimit.stateIn(
         viewModelScope,
